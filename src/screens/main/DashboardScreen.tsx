@@ -41,12 +41,24 @@ export const DashboardScreen = ({ navigation }: Props) => {
       
       const data = await analyticsService.getDashboard();
       
-      console.log('✅ Dashboard data received:', data);
+      console.log('✅ Dashboard data received:', JSON.stringify(data, null, 2));
       
       setDashboardData(data);
     } catch (err: any) {
       console.error('❌ Error loading dashboard:', err);
-      setError(err.message || 'Failed to load dashboard');
+      
+      // Better error message
+      let errorMessage = 'Failed to load dashboard';
+      
+      if (err.message?.includes('Network')) {
+        errorMessage = 'Cannot connect to backend server.\n\nPlease ensure:\n1. Backend server is running\n2. API URL is correct\n3. Internet connection is active';
+      } else if (err.message?.includes('401') || err.message?.includes('Unauthorized')) {
+        errorMessage = 'Please login again';
+      } else {
+        errorMessage = err.message || 'Failed to load dashboard';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -103,10 +115,18 @@ export const DashboardScreen = ({ navigation }: Props) => {
     );
   }
 
-  const balance = parseFloat(dashboardData.summary.savings);
-  const income = parseFloat(dashboardData.summary.income);
-  const expense = parseFloat(dashboardData.summary.expense);
-  const savingsRate = parseFloat(dashboardData.summary.savingsRate);
+  // Safely parse numbers with fallback to 0
+  const balance = Number(dashboardData.summary?.savings) || 0;
+  const income = Number(dashboardData.summary?.income) || 0;
+  const expense = Number(dashboardData.summary?.expense) || 0;
+  const savingsRate = Number(dashboardData.summary?.savingsRate) || 0;
+
+  console.log('📊 Parsed Dashboard Values:', {
+    balance,
+    income,
+    expense,
+    savingsRate
+  });
 
   return (
     <View style={styles.container}>
