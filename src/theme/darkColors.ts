@@ -1,0 +1,15 @@
+export const darkColors = {
+  primary: '#007AFF',
+  secondary: '#5856D6',
+  success: '#34C759',
+  warning: '#FF9500',
+  error: '#FF3B30',
+  background: '#000000',
+  surface: '#1C1C1E',
+  card: '#2C2C2E',
+  text: '#FFFFFF',
+  textSecondary: '#8E8E93',
+  border: '#38383A',
+  white: '#FFFFFF',
+  black: '#000000',
+};
