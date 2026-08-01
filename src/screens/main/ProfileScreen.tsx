@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, typography } from '../../theme';
-import { formatCurrencySimple } from '../../utils';
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore } from '../../store/authStore';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -103,23 +102,7 @@ export const ProfileScreen = () => {
         </LinearGradient>
       </View>
 
-      {/* Stats Cards */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>30</Text>
-          <Text style={styles.statLabel}>Days Active</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>124</Text>
-          <Text style={styles.statLabel}>Transactions</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>₹25K</Text>
-          <Text style={styles.statLabel}>Total Tracked</Text>
-        </View>
-      </View>
+
 
       {/* Dark Mode Toggle */}
       <View style={styles.darkModeCard}>
@@ -234,46 +217,13 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: '600',
   },
-  statsContainer: {
-    flexDirection: 'row',
-    backgroundColor: colors.white,
-    marginHorizontal: spacing.lg,
-    marginTop: -spacing.xl,
-    padding: spacing.lg,
-    borderRadius: 16,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-    marginBottom: spacing.lg,
-  },
-  statCard: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  statLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: colors.border,
-    marginHorizontal: spacing.sm,
-  },
   darkModeCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: colors.white,
     marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
     marginBottom: spacing.md,
     padding: spacing.md,
     borderRadius: 12,

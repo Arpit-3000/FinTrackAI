@@ -1,6 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Text } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
   DashboardScreen,
   TransactionsScreen,
@@ -10,13 +11,22 @@ import {
   ProfileScreen,
 } from '../screens';
 import type { MainTabParamList } from '../types/navigation';
-import { colors } from '../theme';
+import { colors, spacing, borderRadius, shadows } from '../theme';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const Stack = createNativeStackNavigator<MainTabParamList>();
 
-const TabIcon = ({ icon }: { icon: string }) => (
-  <Text style={{ fontSize: 24 }}>{icon}</Text>
+interface TabIconProps {
+  focused: boolean;
+  color: string;
+  size: number;
+  iconName: keyof typeof Ionicons.glyphMap;
+}
+
+const TabIcon = ({ focused, color, iconName }: TabIconProps) => (
+  <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
+    <Ionicons name={iconName} size={24} color={color} />
+  </View>
 );
 
 const TabsNavigator = () => {
@@ -24,18 +34,25 @@ const TabsNavigator = () => {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.primary,
+        tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: {
-          paddingBottom: 8,
-          paddingTop: 8,
-          height: 60,
-          borderTopWidth: 1,
-          borderTopColor: colors.border,
+          backgroundColor: colors.surface,
+          borderTopWidth: 0,
+          height: Platform.OS === 'ios' ? 88 : 68,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+          paddingTop: 12,
+          paddingHorizontal: spacing.sm,
+          ...shadows.lg,
+          elevation: 8,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: '600',
+          marginTop: 4,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 4,
         },
       }}
     >
@@ -44,35 +61,49 @@ const TabsNavigator = () => {
         component={DashboardScreen}
         options={{
           tabBarLabel: 'Home',
-          tabBarIcon: () => <TabIcon icon="🏠" />,
+          tabBarIcon: ({ focused, color, size }) => (
+            <TabIcon focused={focused} color={color} size={size} iconName="home" />
+          ),
         }}
       />
       <Tab.Screen
         name="Transactions"
         component={TransactionsScreen}
         options={{
-          tabBarIcon: () => <TabIcon icon="💳" />,
+          tabBarLabel: 'Transactions',
+          tabBarIcon: ({ focused, color, size }) => (
+            <TabIcon focused={focused} color={color} size={size} iconName="list" />
+          ),
         }}
       />
       <Tab.Screen
         name="Analytics"
         component={AnalyticsScreen}
         options={{
-          tabBarIcon: () => <TabIcon icon="📊" />,
+          tabBarLabel: 'Analytics',
+          tabBarIcon: ({ focused, color, size }) => (
+            <TabIcon focused={focused} color={color} size={size} iconName="stats-chart" />
+          ),
         }}
       />
       <Tab.Screen
         name="Budget"
         component={BudgetScreen}
         options={{
-          tabBarIcon: () => <TabIcon icon="💰" />,
+          tabBarLabel: 'Budget',
+          tabBarIcon: ({ focused, color, size }) => (
+            <TabIcon focused={focused} color={color} size={size} iconName="wallet" />
+          ),
         }}
       />
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
         options={{
-          tabBarIcon: () => <TabIcon icon="👤" />,
+          tabBarLabel: 'Profile',
+          tabBarIcon: ({ focused, color, size }) => (
+            <TabIcon focused={focused} color={color} size={size} iconName="person" />
+          ),
         }}
       />
     </Tab.Navigator>
@@ -94,3 +125,16 @@ export const MainTabNavigator = () => {
     </Stack.Navigator>
   );
 };
+
+const styles = StyleSheet.create({
+  iconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 48,
+    height: 36,
+    borderRadius: borderRadius.md,
+  },
+  iconContainerActive: {
+    backgroundColor: colors.accent + '15',
+  },
+});

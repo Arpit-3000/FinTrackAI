@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing } from '../theme';
 
 interface LoadingButtonProps {
-  title: string;
+  title: string | React.ReactNode;
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
@@ -32,7 +32,11 @@ export const LoadingButton = ({
         {loading ? (
           <ActivityIndicator color={colors.white} />
         ) : (
-          <Text style={styles.buttonText}>{title}</Text>
+          typeof title === 'string' ? (
+            <Text style={styles.buttonText}>{title}</Text>
+          ) : (
+            title
+          )
         )}
       </LinearGradient>
     </TouchableOpacity>

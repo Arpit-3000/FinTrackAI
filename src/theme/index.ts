@@ -1,13 +1,18 @@
 import { colors } from './colors';
-import { spacing } from './spacing';
+import { darkColors } from './darkColors';
 import { typography } from './typography';
+import { spacing, borderRadius, shadows } from './spacing';
 
-export { colors, spacing, typography };
+// Re-export everything
+export { colors, darkColors, typography, spacing, borderRadius, shadows };
 
+// Complete theme object
 export const theme = {
   colors,
-  spacing,
   typography,
+  spacing,
+  borderRadius,
+  shadows,
 };
 
 export type Theme = typeof theme;

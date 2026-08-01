@@ -1,7 +1,6 @@
 export { Button } from './Button';
 export { Input } from './Input';
 export { LoadingButton } from './LoadingButton';
-export { TransactionItem } from './TransactionItem';
 export { StatCard } from './StatCard';
 export { QuickActionButton } from './QuickActionButton';
 export { BarChart } from './BarChart';

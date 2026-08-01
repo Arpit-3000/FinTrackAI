@@ -1,26 +1,88 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Dimensions,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
-import { colors, spacing, typography } from '../../theme';
-import {
-  StatCard,
-  TransactionItem,
-  QuickActionButton,
-  BarChart,
-  PieChart,
-  SkeletonLoader,
-  ErrorView,
-} from '../../components';
-import { analyticsService, transactionService } from '../../services';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import Svg, { Path, Circle, Line, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
+import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
+import { SkeletonLoader, ErrorView } from '../../components';
+import { transactionService } from '../../services';
 import { formatCurrency } from '../../utils';
-import { API_BASE_URL } from '../../constants';
 import { useAuthStore } from '../../store/authStore';
-import type { DashboardData } from '../../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { MainTabParamList } from '../../types/navigation';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 type Props = NativeStackScreenProps<MainTabParamList, 'Dashboard'>;
+
+interface DashboardData {
+  balance: number;
+  cardNumber: string;
+  cardHolder: string;
+  validThru: string;
+  weeklyData: { day: string; amount: number }[];
+  recentTransactions: any[];
+  weeklyChange: number;
+  categoryBreakdown: { category: string; amount: number; percentage: string; color: string }[];
+}
+
+// Category icons mapping with premium vector icons
+const getCategoryIcon = (category: string): { name: string; type: 'ionicons' | 'material' } => {
+  const categoryMap: Record<string, { name: string; type: 'ionicons' | 'material' }> = {
+    food: { name: 'fast-food', type: 'ionicons' },
+    groceries: { name: 'cart', type: 'ionicons' },
+    shopping: { name: 'bag-handle', type: 'ionicons' },
+    transport: { name: 'car', type: 'ionicons' },
+    entertainment: { name: 'film', type: 'ionicons' },
+    bills: { name: 'receipt', type: 'ionicons' },
+    utilities: { name: 'flash', type: 'ionicons' },
+    healthcare: { name: 'medical', type: 'ionicons' },
+    education: { name: 'school', type: 'ionicons' },
+    salary: { name: 'cash', type: 'ionicons' },
+    investment: { name: 'trending-up', type: 'ionicons' },
+    rent: { name: 'home', type: 'ionicons' },
+    travel: { name: 'airplane', type: 'ionicons' },
+    gym: { name: 'fitness', type: 'ionicons' },
+    restaurant: { name: 'restaurant', type: 'ionicons' },
+    clothing: { name: 'shirt', type: 'ionicons' },
+    electronics: { name: 'phone-portrait', type: 'ionicons' },
+    insurance: { name: 'shield-checkmark', type: 'ionicons' },
+    subscription: { name: 'repeat', type: 'ionicons' },
+    gift: { name: 'gift', type: 'ionicons' },
+    other: { name: 'wallet', type: 'ionicons' },
+  };
+  return categoryMap[category.toLowerCase()] || { name: 'wallet', type: 'ionicons' };
+};
+
+// Category colors
+const getCategoryColor = (category: string): string => {
+  const colorMap: Record<string, string> = {
+    food: colors.chartGold,
+    groceries: colors.chartGreen,
+    shopping: colors.accent,
+    transport: colors.chartBlue,
+    entertainment: colors.chartPurple,
+    bills: colors.warning,
+    healthcare: colors.chartRed,
+    education: colors.info,
+    salary: colors.success,
+    investment: colors.chartBronze,
+    rent: colors.accent,
+    utilities: colors.warning,
+    travel: colors.chartBlue,
+    other: colors.textSecondary,
+  };
+  return colorMap[category.toLowerCase()] || colors.textSecondary;
+};
 
 export const DashboardScreen = ({ navigation }: Props) => {
   const { user } = useAuthStore();
@@ -32,35 +94,19 @@ export const DashboardScreen = ({ navigation }: Props) => {
     loadDashboardData();
   }, []);
 
-  const calculateFromTransactions = async () => {
-    console.log('📊 Calculating dashboard data from transactions...');
-    
+  const loadDashboardData = async () => {
     try {
+      setLoading(true);
+      setError(null);
+
       const transactionsResponse = await transactionService.getTransactions({ limit: 1000 });
       const transactions = transactionsResponse.data || [];
-      
-      console.log(`📝 Found ${transactions.length} transactions`);
-      
-      if (transactions.length === 0) {
-        console.log('⚠️ No transactions found');
-        return {
-          summary: {
-            income: '0',
-            expense: '0',
-            savings: '0',
-            savingsRate: '0',
-          },
-          recentTransactions: [],
-          monthlySpending: [],
-          categoryBreakdown: [],
-        };
-      }
-      
-      // Calculate totals
+
+      // Calculate balance
       let totalIncome = 0;
       let totalExpense = 0;
-      
-      transactions.forEach(t => {
+
+      transactions.forEach((t) => {
         const amount = Math.abs(Number(t.amount) || 0);
         if (t.type === 'income') {
           totalIncome += amount;
@@ -68,91 +114,84 @@ export const DashboardScreen = ({ navigation }: Props) => {
           totalExpense += amount;
         }
       });
-      
-      const savings = totalIncome - totalExpense;
-      const savingsRate = totalIncome > 0 ? ((savings / totalIncome) * 100).toFixed(1) : '0';
-      
-      console.log('💰 Calculated Totals:', {
-        income: totalIncome,
-        expense: totalExpense,
-        savings: savings,
-        savingsRate: savingsRate + '%'
-      });
-      
-      // Get category breakdown for expenses
+
+      const balance = totalIncome - totalExpense;
+
+      // Calculate weekly data (last 7 days)
+      const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const today = new Date();
+      const weeklyData = [];
+
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dayName = weekDays[date.getDay()];
+
+        const dayTotal = transactions
+          .filter((t) => {
+            const tDate = new Date(t.date);
+            return (
+              tDate.getDate() === date.getDate() &&
+              tDate.getMonth() === date.getMonth() &&
+              tDate.getFullYear() === date.getFullYear()
+            );
+          })
+          .reduce((sum, t) => sum + Math.abs(Number(t.amount) || 0), 0);
+
+        weeklyData.push({ day: dayName, amount: dayTotal });
+      }
+
+      // Calculate weekly change
+      const thisWeekTotal = weeklyData.reduce((sum, d) => sum + d.amount, 0);
+      const lastWeekStart = new Date(today);
+      lastWeekStart.setDate(lastWeekStart.getDate() - 13);
+      const lastWeekEnd = new Date(today);
+      lastWeekEnd.setDate(lastWeekEnd.getDate() - 7);
+
+      const lastWeekTotal = transactions
+        .filter((t) => {
+          const tDate = new Date(t.date);
+          return tDate >= lastWeekStart && tDate <= lastWeekEnd;
+        })
+        .reduce((sum, t) => sum + Math.abs(Number(t.amount) || 0), 0);
+
+      const weeklyChange = lastWeekTotal > 0 ? ((thisWeekTotal - lastWeekTotal) / lastWeekTotal) * 100 : 0;
+
+      // Calculate category breakdown for expenses
       const categoryMap = new Map<string, { amount: number; count: number }>();
-      
+
       transactions
-        .filter(t => t.type === 'expense')
-        .forEach(t => {
+        .filter((t) => t.type === 'expense')
+        .forEach((t) => {
           const amount = Math.abs(Number(t.amount) || 0);
           const existing = categoryMap.get(t.category) || { amount: 0, count: 0 };
           categoryMap.set(t.category, {
             amount: existing.amount + amount,
-            count: existing.count + 1
+            count: existing.count + 1,
           });
         });
-      
+
       const categoryBreakdown = Array.from(categoryMap.entries())
         .map(([category, data]) => ({
           category,
           amount: data.amount,
           count: data.count,
-          percentage: totalExpense > 0 ? ((data.amount / totalExpense) * 100).toFixed(1) : '0'
+          percentage: totalExpense > 0 ? ((data.amount / totalExpense) * 100).toFixed(1) : '0',
+          color: getCategoryColor(category),
         }))
         .sort((a, b) => b.amount - a.amount)
-        .slice(0, 5);
-      
-      // Get monthly spending for last 6 months
-      const now = new Date();
-      const monthlyMap = new Map<string, number>();
-      
-      transactions
-        .filter(t => t.type === 'expense')
-        .forEach(t => {
-          const date = new Date(t.date);
-          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-          const amount = Math.abs(Number(t.amount) || 0);
-          monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + amount);
-        });
-      
-      const monthlySpending = Array.from(monthlyMap.entries())
-        .map(([month, amount]) => ({ month, amount }))
-        .sort((a, b) => a.month.localeCompare(b.month))
-        .slice(-6);
-      
-      return {
-        summary: {
-          income: totalIncome.toString(),
-          expense: totalExpense.toString(),
-          savings: savings.toString(),
-          savingsRate: savingsRate,
-        },
-        recentTransactions: transactions.slice(0, 5),
-        monthlySpending,
-        categoryBreakdown,
-      };
-    } catch (err) {
-      console.error('❌ Error calculating from transactions:', err);
-      throw err;
-    }
-  };
+        .slice(0, 4);
 
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      console.log('🏠 Loading dashboard data...');
-      console.log('API URL:', API_BASE_URL);
-      
-      // Always calculate from transactions first
-      const calculatedData = await calculateFromTransactions();
-      
-      console.log('✅ Dashboard data ready:', calculatedData);
-      
-      setDashboardData(calculatedData);
-      
+      setDashboardData({
+        balance,
+        cardNumber: '**** **** **** 0023',
+        cardHolder: user?.name || 'User',
+        validThru: '08/25',
+        weeklyData,
+        recentTransactions: transactions.slice(0, 5),
+        weeklyChange,
+        categoryBreakdown,
+      });
     } catch (err: any) {
       console.error('❌ Error loading dashboard:', err);
       setError(err.message || 'Failed to load dashboard');
@@ -161,81 +200,48 @@ export const DashboardScreen = ({ navigation }: Props) => {
     }
   };
 
-  // Get greeting based on time of day
   const getGreeting = () => {
     const hour = new Date().getHours();
-    
-    if (hour >= 5 && hour < 12) {
-      return 'Good Morning! ☀️';
-    } else if (hour >= 12 && hour < 17) {
-      return 'Good Afternoon! 🌤️';
-    } else if (hour >= 17 && hour < 21) {
-      return 'Good Evening! 🌆';
-    } else {
-      return 'Good Night! 🌙';
-    }
-  };
-
-  const handleQuickAction = (actionId: string) => {
-    if (actionId === 'add-income') {
-      // @ts-ignore - navigation works at runtime
-      navigation.navigate('AddTransaction', {});
-    } else if (actionId === 'add-expense') {
-      // @ts-ignore - navigation works at runtime
-      navigation.navigate('AddTransaction', {});
-    } else if (actionId === 'budget') {
-      // @ts-ignore - navigation works at runtime
-      navigation.navigate('Budget');
-    } else if (actionId === 'analytics') {
-      // @ts-ignore - navigation works at runtime
-      navigation.navigate('Analytics');
-    } else {
-      Alert.alert('Quick Action', `${actionId} action coming soon!`);
-    }
-  };
-
-  const handleAddTransaction = () => {
-    // @ts-ignore - navigation works at runtime
-    navigation.navigate('AddTransaction', {});
+    if (hour >= 5 && hour < 12) return 'Good Morning';
+    if (hour >= 12 && hour < 17) return 'Good Afternoon';
+    if (hour >= 17 && hour < 21) return 'Good Evening';
+    return 'Good Night';
   };
 
   const playNotificationSound = async () => {
     try {
-      // Set audio mode for playing sounds
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         staysActiveInBackground: false,
       });
-      
-      // Create and play notification sound
+
       const { sound } = await Audio.Sound.createAsync(
-        // Using a notification bell/ting sound from online source
         { uri: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' },
         { shouldPlay: true, volume: 0.8 }
       );
-      
-      console.log('🔔 Playing notification sound');
-      
-      // Unload sound after playing to free memory
+
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) {
           sound.unloadAsync();
-          console.log('✅ Sound finished and unloaded');
         }
       });
     } catch (error) {
       console.error('❌ Could not play sound:', error);
-      // Silent fail - don't disrupt user experience
     }
   };
 
   const handleNotificationPress = async () => {
     await playNotificationSound();
-    Alert.alert(
-      'Notifications 🔔',
-      'No new notifications',
-      [{ text: 'OK' }]
-    );
+    Alert.alert('Notifications', 'No new notifications', [{ text: 'OK' }]);
+  };
+
+  const handleRefresh = () => {
+    loadDashboardData();
+  };
+
+  const handleProfilePress = () => {
+    // @ts-ignore - navigation works at runtime
+    navigation.navigate('Profile');
   };
 
   if (loading) {
@@ -243,200 +249,329 @@ export const DashboardScreen = ({ navigation }: Props) => {
   }
 
   if (error || !dashboardData) {
-    return (
-      <ErrorView 
-        message={error || 'Failed to load dashboard'} 
-        onRetry={loadDashboardData}
-      />
-    );
+    return <ErrorView message={error || 'Failed to load dashboard'} onRetry={loadDashboardData} />;
   }
 
-  // Safely parse numbers with fallback to 0
-  const balance = Number(dashboardData.summary?.savings) || 0;
-  const income = Number(dashboardData.summary?.income) || 0;
-  const expense = Number(dashboardData.summary?.expense) || 0;
-  const savingsRate = Number(dashboardData.summary?.savingsRate) || 0;
-
-  console.log('📊 Parsed Dashboard Values:', {
-    balance,
-    income,
-    expense,
-    savingsRate
-  });
+  // Find min and max for chart scaling
+  const amounts = dashboardData.weeklyData.map((d) => d.amount);
+  const maxAmount = Math.max(...amounts);
+  const minAmount = Math.min(...amounts);
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Header with Balance */}
-        <View>
-          <LinearGradient
-            colors={[colors.primary, colors.secondary]}
-            style={styles.header}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <View style={styles.headerTop}>
-              <View>
-                <Text style={styles.greeting}>{getGreeting()}</Text>
-                <Text style={styles.username}>{user?.name || 'User'}</Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* Dark Header */}
+        <View style={styles.darkHeader}>
+          {/* Top Bar */}
+          <View style={styles.topBar}>
+            <TouchableOpacity 
+              style={styles.refreshButton} 
+              onPress={handleRefresh}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="reload" size={24} color={colors.accent} />
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={handleProfilePress} activeOpacity={0.7}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'U'}</Text>
               </View>
-              <TouchableOpacity 
-                style={styles.notificationButton}
-                onPress={handleNotificationPress}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.notificationIcon}>🔔</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Greeting */}
+          <View style={styles.greetingContainer}>
+            <Ionicons name="sunny" size={16} color={colors.accentGold} />
+            <Text style={styles.greeting}>{getGreeting()}</Text>
+          </View>
+
+          <Text style={styles.welcomeText}>{user?.name || 'User'}</Text>
+
+          {/* Premium Card */}
+          <View style={styles.cardContainer}>
+            <LinearGradient
+              colors={['#3A3A3A', '#2B2B2B', '#4A4A4A']}
+              style={styles.premiumCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              {/* Contactless Icon */}
+              <View style={styles.contactlessIcon}>
+                <View style={styles.contactlessWave} />
+                <View style={[styles.contactlessWave, { marginLeft: -8 }]} />
+                <View style={[styles.contactlessWave, { marginLeft: -8 }]} />
+              </View>
+
+              {/* Balance Label */}
+              <Text style={styles.balanceLabel}>Available Credit</Text>
+
+              {/* Balance Amount */}
+              <Text style={styles.balanceAmount}>₹{dashboardData.balance.toLocaleString('en-IN')}</Text>
+
+              {/* Card Number */}
+              <Text style={styles.cardNumber}>{dashboardData.cardNumber}</Text>
+
+              {/* Card Footer */}
+              <View style={styles.cardFooter}>
+                <View>
+                  <Text style={styles.cardLabel}>Card Holder</Text>
+                  <Text style={styles.cardValue}>{dashboardData.cardHolder}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.cardLabel}>Valid Thru</Text>
+                  <Text style={styles.cardValue}>{dashboardData.validThru}</Text>
+                </View>
+              </View>
+
+              {/* Card Chip */}
+              <View style={styles.cardChipContainer}>
+                <View style={styles.cardChip1} />
+                <View style={styles.cardChip2} />
+              </View>
+            </LinearGradient>
+          </View>
+        </View>
+
+        {/* Light Content Area */}
+        <View style={styles.lightContent}>
+          {/* Analytics Section */}
+          <View style={styles.analyticsCard}>
+            <View style={styles.analyticHeader}>
+              <Text style={styles.sectionTitle}>Analytics</Text>
+              <View style={styles.dailyBadge}>
+                <Text style={styles.dailyText}>Daily</Text>
+                <View style={styles.dailyDot} />
+              </View>
+            </View>
+
+            {/* Chart */}
+            <View style={styles.chartContainer}>
+              {/* Change Indicator */}
+              <View style={styles.changeIndicator}>
+                <View style={styles.changeIcon}>
+                  <Ionicons 
+                    name={dashboardData.weeklyChange >= 0 ? "trending-up" : "trending-down"} 
+                    size={24} 
+                    color={dashboardData.weeklyChange >= 0 ? colors.success : colors.expense} 
+                  />
+                </View>
+                <Text style={[styles.changeAmount, { color: dashboardData.weeklyChange >= 0 ? colors.success : colors.expense }]}>
+                  {dashboardData.weeklyChange >= 0 ? '+' : ''}₹{Math.abs(dashboardData.weeklyChange * 100).toFixed(2)}
+                </Text>
+              </View>
+
+              {/* Weekly Line Chart */}
+              <View style={styles.chartWrapper}>
+                <Svg width={SCREEN_WIDTH - 80} height={180} style={styles.svgChart}>
+                  <Defs>
+                    <SvgGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <Stop offset="0%" stopColor={colors.success} stopOpacity="0.8" />
+                      <Stop offset="50%" stopColor={colors.accent} stopOpacity="0.6" />
+                      <Stop offset="100%" stopColor={colors.expense} stopOpacity="0.5" />
+                    </SvgGradient>
+                    <SvgGradient id="fillGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <Stop offset="0%" stopColor={colors.backgroundSecondary} stopOpacity="0.6" />
+                      <Stop offset="100%" stopColor={colors.backgroundSecondary} stopOpacity="0.1" />
+                    </SvgGradient>
+                  </Defs>
+
+                  {/* Generate smooth curve path */}
+                  {(() => {
+                    const chartWidth = SCREEN_WIDTH - 80;
+                    const chartHeight = 140;
+                    const padding = 20;
+                    const pointSpacing = chartWidth / (dashboardData.weeklyData.length + 1);
+
+                    // Calculate points
+                    const points = dashboardData.weeklyData.map((item, index) => {
+                      const x = padding + pointSpacing * (index + 0.5);
+                      const y = chartHeight - (item.amount / maxAmount) * (chartHeight - 40);
+                      return { x, y, amount: item.amount };
+                    });
+
+                    // Create smooth curve using quadratic bezier
+                    let pathData = `M ${points[0].x} ${points[0].y}`;
+                    for (let i = 0; i < points.length - 1; i++) {
+                      const current = points[i];
+                      const next = points[i + 1];
+                      const controlX = (current.x + next.x) / 2;
+                      pathData += ` Q ${controlX} ${current.y}, ${controlX} ${(current.y + next.y) / 2}`;
+                      pathData += ` Q ${controlX} ${next.y}, ${next.x} ${next.y}`;
+                    }
+
+                    // Fill path
+                    const fillPath = pathData + ` L ${points[points.length - 1].x} ${chartHeight} L ${points[0].x} ${chartHeight} Z`;
+
+                    return (
+                      <>
+                        {/* Fill area under curve */}
+                        <Path d={fillPath} fill="url(#fillGradient)" />
+                        
+                        {/* Line curve */}
+                        <Path
+                          d={pathData}
+                          stroke="url(#lineGradient)"
+                          strokeWidth="3"
+                          fill="none"
+                          strokeLinecap="round"
+                        />
+
+                        {/* Points and Wednesday highlight */}
+                        {points.map((point, index) => {
+                          const isWednesday = dashboardData.weeklyData[index].day === 'Wed';
+                          return (
+                            <Circle
+                              key={index}
+                              cx={point.x}
+                              cy={point.y}
+                              r={isWednesday ? 8 : 4}
+                              fill={isWednesday ? colors.accent : colors.text}
+                              stroke={isWednesday ? colors.white : 'none'}
+                              strokeWidth={isWednesday ? 3 : 0}
+                            />
+                          );
+                        })}
+
+                        {/* Wednesday vertical highlight bar */}
+                        {(() => {
+                          const wednesdayIndex = dashboardData.weeklyData.findIndex((d) => d.day === 'Wed');
+                          if (wednesdayIndex !== -1) {
+                            const wedPoint = points[wednesdayIndex];
+                            return (
+                              <>
+                                <Line
+                                  x1={wedPoint.x}
+                                  y1={wedPoint.y + 15}
+                                  x2={wedPoint.x}
+                                  y2={chartHeight}
+                                  stroke={colors.accent}
+                                  strokeWidth="2"
+                                  strokeOpacity="0.3"
+                                />
+                              </>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </>
+                    );
+                  })()}
+                </Svg>
+
+                {/* Day labels */}
+                <View style={styles.chartLabels}>
+                  {dashboardData.weeklyData.map((item, index) => (
+                    <Text
+                      key={index}
+                      style={[
+                        styles.chartLabel,
+                        item.day === 'Wed' && styles.chartLabelActive,
+                      ]}
+                    >
+                      {item.day}
+                    </Text>
+                  ))}
+                </View>
+
+                {/* Wednesday tooltip */}
+                {(() => {
+                  const wednesdayIndex = dashboardData.weeklyData.findIndex((d) => d.day === 'Wed');
+                  if (wednesdayIndex !== -1) {
+                    const wedData = dashboardData.weeklyData[wednesdayIndex];
+                    return (
+                      <View style={styles.tooltipContainer}>
+                        <View style={styles.tooltip}>
+                          <Text style={styles.tooltipAmount}>-₹{wedData.amount.toFixed(2)}</Text>
+                          <Text style={styles.tooltipDate}>3 Jan, 2025</Text>
+                        </View>
+                      </View>
+                    );
+                  }
+                  return null;
+                })()}
+              </View>
+            </View>
+          </View>
+
+          {/* Recent Activity */}
+          <View style={styles.activitySection}>
+            <View style={styles.activityHeader}>
+              <Text style={styles.sectionTitle}>Recent Activity</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Transactions')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={styles.viewAllText}>View All</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={styles.balanceContainer}>
-              <Text style={styles.balanceLabel}>Total Balance</Text>
-              <Text style={styles.balanceAmount}>
-                {formatCurrency(balance)}
-              </Text>
-              <View style={styles.balanceChange}>
-                <Text style={styles.balanceChangeText}>
-                  ↑ {savingsRate.toFixed(1)}% savings rate
-                </Text>
-              </View>
-            </View>
-          </LinearGradient>
-        </View>
+            {dashboardData.recentTransactions.map((transaction, index) => {
+              const categoryIcon = getCategoryIcon(transaction.category);
+              const categoryColor = getCategoryColor(transaction.category);
 
-        <View style={styles.content}>
-          {/* Stat Cards */}
-          <View style={styles.statsContainer}>
-            <StatCard
-              title="Income"
-              amount={income}
-              change={0}
-              percentage={100}
-              gradientColors={['#34C759', '#28A745']}
-              icon="💵"
-              delay={100}
-            />
-            <StatCard
-              title="Expenses"
-              amount={expense}
-              change={0}
-              percentage={expense > 0 && income > 0 ? (expense / income) * 100 : 0}
-              gradientColors={['#FF3B30', '#DC3545']}
-              icon="💸"
-              delay={200}
-            />
-            <StatCard
-              title="Savings"
-              amount={balance}
-              change={0}
-              percentage={savingsRate}
-              gradientColors={['#007AFF', '#0056CC']}
-              icon="🏦"
-              delay={300}
-            />
+              return (
+                <View key={transaction._id || index} style={styles.transactionItem}>
+                  <View style={styles.transactionLeft}>
+                    <View style={[styles.transactionIcon, { backgroundColor: categoryColor + '20' }]}>
+                      {categoryIcon.type === 'ionicons' ? (
+                        <Ionicons name={categoryIcon.name as any} size={24} color={categoryColor} />
+                      ) : (
+                        <MaterialCommunityIcons name={categoryIcon.name as any} size={24} color={categoryColor} />
+                      )}
+                    </View>
+                    <View>
+                      <Text style={styles.transactionTitle}>{transaction.description || transaction.category}</Text>
+                      <Text style={styles.transactionDate}>
+                        {new Date(transaction.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.transactionAmount, { color: transaction.type === 'income' ? colors.success : colors.text }]}>
+                    {transaction.type === 'income' ? '+' : '-'}₹{Math.abs(Number(transaction.amount)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </Text>
+                </View>
+              );
+            })}
           </View>
 
-          {/* Quick Actions */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
-            <View style={styles.quickActions}>
-              <QuickActionButton
-                title="Income"
-                emoji="💰"
-                color="#34C759"
-                onPress={() => handleQuickAction('add-income')}
-                index={0}
-              />
-              <QuickActionButton
-                title="Expense"
-                emoji="💸"
-                color="#FF3B30"
-                onPress={() => handleQuickAction('add-expense')}
-                index={1}
-              />
-              <QuickActionButton
-                title="Budget"
-                emoji="📊"
-                color="#007AFF"
-                onPress={() => handleQuickAction('budget')}
-                index={2}
-              />
-              <QuickActionButton
-                title="Analytics"
-                emoji="📈"
-                color="#FF9500"
-                onPress={() => handleQuickAction('analytics')}
-                index={3}
-              />
-            </View>
-          </View>
-
-          {/* Monthly Spending Chart */}
-          {dashboardData.monthlySpending && dashboardData.monthlySpending.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Monthly Spending</Text>
-              <BarChart data={dashboardData.monthlySpending.map(m => ({
-                label: new Date(m.month).toLocaleDateString('en-US', { month: 'short' }),
-                amount: m.amount
-              }))} />
-            </View>
-          )}
-
-          {/* Spending by Category */}
+          {/* Category Breakdown */}
           {dashboardData.categoryBreakdown && dashboardData.categoryBreakdown.length > 0 && (
-            <View style={styles.section}>
-              <PieChart data={dashboardData.categoryBreakdown.map(c => ({
-                category: c.category,
-                amount: c.amount,
-                percentage: parseFloat(c.percentage),
-                color: ['#FF9500', '#FF3B30', '#34C759', '#007AFF', '#5856D6', '#FF2D55'][
-                  dashboardData.categoryBreakdown.indexOf(c) % 6
-                ]
-              }))} />
-            </View>
-          )}
+            <View style={styles.categorySection}>
+              <Text style={styles.sectionTitle}>Spending by Category</Text>
 
-          {/* Recent Transactions */}
-          {dashboardData.recentTransactions && dashboardData.recentTransactions.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Recent Transactions</Text>
-                <TouchableOpacity>
-                  <Text style={styles.seeAllButton}>See All</Text>
-                </TouchableOpacity>
-              </View>
-              {dashboardData.recentTransactions.slice(0, 5).map((transaction, index) => (
-                <TransactionItem
-                  key={transaction._id}
-                  transaction={transaction}
-                  index={index}
-                  onPress={() => Alert.alert('Transaction', transaction.description || 'Transaction')}
-                />
-              ))}
+              {dashboardData.categoryBreakdown.map((item, index) => {
+                const categoryIcon = getCategoryIcon(item.category);
+
+                return (
+                  <View key={index} style={styles.categoryItem}>
+                    <View style={styles.categoryLeft}>
+                      <View style={[styles.categoryIcon, { backgroundColor: item.color + '20' }]}>
+                        {categoryIcon.type === 'ionicons' ? (
+                          <Ionicons name={categoryIcon.name as any} size={22} color={item.color} />
+                        ) : (
+                          <MaterialCommunityIcons name={categoryIcon.name as any} size={22} color={item.color} />
+                        )}
+                      </View>
+                      <View style={styles.categoryInfo}>
+                        <Text style={styles.categoryName}>{item.category}</Text>
+                        <View style={styles.progressBarBg}>
+                          <View
+                            style={[
+                              styles.progressBarFill,
+                              { width: `${item.percentage}%`, backgroundColor: item.color },
+                            ]}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.categoryRight}>
+                      <Text style={styles.categoryAmount}>₹{item.amount.toLocaleString('en-IN')}</Text>
+                      <Text style={styles.categoryPercentage}>{item.percentage}%</Text>
+                    </View>
+                  </View>
+                );
+              })}
             </View>
           )}
         </View>
       </ScrollView>
-
-      {/* Floating Action Button */}
-      <View style={styles.fab}>
-        <TouchableOpacity
-          style={styles.fabButton}
-          onPress={handleAddTransaction}
-          activeOpacity={0.9}
-        >
-          <LinearGradient
-            colors={[colors.primary, colors.secondary]}
-            style={styles.fabGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Text style={styles.fabIcon}>+</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 };
@@ -447,147 +582,352 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: spacing.massive,
   },
-  header: {
-    paddingTop: spacing.xl * 1.8,
-    paddingBottom: spacing.xl * 2.8,
+  darkHeader: {
+    backgroundColor: colors.cardDark,
+    paddingTop: spacing.huge,
     paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxxl,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
   },
-  headerTop: {
+  topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xl * 1.2,
+    marginBottom: spacing.xl,
+  },
+  refreshButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(198, 122, 77, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    ...typography.h4,
+    color: colors.white,
+    fontWeight: '600',
+  },
+  greetingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+    gap: spacing.xs,
   },
   greeting: {
     ...typography.body,
+    color: colors.textSecondary,
+  },
+  welcomeText: {
+    ...typography.displayMedium,
     color: colors.white,
-    fontSize: 15,
-    marginBottom: spacing.xs,
-    opacity: 0.95,
-  },
-  username: {
-    ...typography.h2,
-    color: colors.white,
-    fontWeight: 'bold',
-    fontSize: 26,
-  },
-  notificationButton: {
-    width: 48,
-    height: 48,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  notificationIcon: {
-    fontSize: 24,
-  },
-  balanceContainer: {
-    alignItems: 'center',
-    paddingTop: spacing.sm,
-  },
-  balanceLabel: {
-    color: colors.white,
-    fontSize: 15,
-    opacity: 0.9,
-    marginBottom: spacing.sm,
-    letterSpacing: 0.5,
-  },
-  balanceAmount: {
-    color: colors.white,
-    fontSize: 52,
-    fontWeight: 'bold',
-    marginBottom: spacing.md,
-    letterSpacing: -1,
-  },
-  balanceChange: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: 24,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  balanceChangeText: {
-    color: colors.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  content: {
-    padding: spacing.lg,
-    marginTop: -spacing.xl * 1.8,
-  },
-  statsContainer: {
-    marginBottom: spacing.lg,
-  },
-  section: {
     marginBottom: spacing.xl,
   },
-  sectionHeader: {
+  cardContainer: {
+    marginTop: spacing.base,
+  },
+  premiumCard: {
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    minHeight: 200,
+    ...shadows.xl,
+  },
+  contactlessIcon: {
+    flexDirection: 'row',
+    position: 'absolute',
+    top: spacing.lg,
+    right: spacing.lg,
+  },
+  contactlessWave: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.white,
+    opacity: 0.4,
+  },
+  balanceLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  balanceAmount: {
+    ...typography.displaySmall,
+    color: colors.white,
+    fontWeight: '700',
+    marginBottom: spacing.xl,
+  },
+  cardNumber: {
+    ...typography.titleMedium,
+    color: colors.white,
+    letterSpacing: 2,
+    marginBottom: spacing.lg,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  cardLabel: {
+    ...typography.captionSmall,
+    color: colors.textSecondary,
+    marginBottom: spacing.xxs,
+  },
+  cardValue: {
+    ...typography.titleMedium,
+    color: colors.white,
+  },
+  cardChipContainer: {
+    position: 'absolute',
+    bottom: spacing.lg,
+    right: spacing.lg,
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  cardChip1: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.accent,
+    opacity: 0.8,
+  },
+  cardChip2: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.success,
+    opacity: 0.8,
+  },
+  lightContent: {
+    padding: spacing.lg,
+  },
+  analyticsCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.base,
+    ...shadows.sm,
+  },
+  analyticHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   sectionTitle: {
-    ...typography.h3,
+    ...typography.h4,
     color: colors.text,
-    marginBottom: spacing.md,
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  seeAllButton: {
-    color: colors.primary,
-    fontSize: 15,
     fontWeight: '600',
   },
-  quickActions: {
+  dailyBadge: {
     flexDirection: 'row',
-    marginHorizontal: -spacing.xs,
+    alignItems: 'center',
+    backgroundColor: colors.text,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.round,
+    gap: spacing.xs,
   },
-  fab: {
+  dailyText: {
+    ...typography.caption,
+    color: colors.white,
+    fontWeight: '600',
+  },
+  dailyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.white,
+  },
+  chartContainer: {
+    position: 'relative',
+  },
+  changeIndicator: {
     position: 'absolute',
-    bottom: spacing.xl * 1.2,
-    right: spacing.xl,
+    top: spacing.base,
+    left: spacing.base,
+    zIndex: 10,
   },
-  fabButton: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 12,
+  changeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.backgroundSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
   },
-  fabGradient: {
+  changeAmount: {
+    ...typography.titleMedium,
+    fontWeight: '700',
+  },
+  chartWrapper: {
+    position: 'relative',
     width: '100%',
-    height: '100%',
-    borderRadius: 34,
+    marginTop: spacing.base,
+  },
+  svgChart: {
+    marginBottom: spacing.sm,
+  },
+  chartLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: spacing.base,
+  },
+  chartLabel: {
+    ...typography.captionSmall,
+    color: colors.textSecondary,
+    flex: 1,
+    textAlign: 'center',
+  },
+  chartLabelActive: {
+    color: colors.text,
+    fontWeight: '700',
+  },
+  tooltipContainer: {
+    position: 'absolute',
+    top: spacing.xl,
+    right: spacing.xl,
+    zIndex: 10,
+  },
+  tooltip: {
+    backgroundColor: colors.backgroundSecondary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+    ...shadows.sm,
+  },
+  tooltipAmount: {
+    ...typography.titleMedium,
+    color: colors.accent,
+    fontWeight: '700',
+    marginBottom: spacing.xxs,
+  },
+  tooltipDate: {
+    ...typography.captionSmall,
+    color: colors.textSecondary,
+  },
+  activitySection: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    ...shadows.sm,
+  },
+  activityHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.base,
+  },
+  viewAllText: {
+    ...typography.titleSmall,
+    color: colors.accent,
+    fontWeight: '600',
+  },
+  transactionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  transactionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  transactionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  fabIcon: {
-    color: colors.white,
-    fontSize: 38,
-    fontWeight: '300',
-    marginTop: -2,
+  transactionTitle: {
+    ...typography.titleMedium,
+    color: colors.text,
+    marginBottom: spacing.xxs,
+  },
+  transactionDate: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  transactionAmount: {
+    ...typography.titleLarge,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  categorySection: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginTop: spacing.base,
+    ...shadows.sm,
+  },
+  categoryItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  categoryLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.md,
+  },
+  categoryIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryInfo: {
+    flex: 1,
+  },
+  categoryName: {
+    ...typography.titleMedium,
+    color: colors.text,
+    marginBottom: spacing.xs,
+    textTransform: 'capitalize',
+  },
+  progressBarBg: {
+    height: 6,
+    backgroundColor: colors.border,
+    borderRadius: borderRadius.round,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: borderRadius.round,
+  },
+  categoryRight: {
+    alignItems: 'flex-end',
+    marginLeft: spacing.md,
+  },
+  categoryAmount: {
+    ...typography.titleMedium,
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: spacing.xxs,
+  },
+  categoryPercentage: {
+    ...typography.caption,
+    color: colors.textSecondary,
   },
 });

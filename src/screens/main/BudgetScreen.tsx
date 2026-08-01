@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, spacing, typography } from '../../theme';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, spacing, typography, borderRadius, shadows } from '../../theme';
 import { budgetService } from '../../services';
 import { formatCurrency, formatCurrencySimple } from '../../utils';
 import { SkeletonLoader, ErrorView, LoadingButton } from '../../components';
@@ -21,6 +22,42 @@ export const BudgetScreen = ({ navigation }: Props) => {
   // Form state
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
+  // Category icons mapping (matching Dashboard/Transaction pages)
+  const getCategoryIcon = (category: string): string => {
+    const categoryMap: Record<string, string> = {
+      'food': 'fast-food',
+      'dining': 'fast-food',
+      'groceries': 'cart',
+      'shopping': 'bag-handle',
+      'transport': 'car',
+      'entertainment': 'film',
+      'bills': 'receipt',
+      'utilities': 'flash',
+      'healthcare': 'medical',
+      'health': 'medical',
+      'education': 'school',
+      'salary': 'cash',
+      'investment': 'trending-up',
+      'rent': 'home',
+      'travel': 'airplane',
+      'gym': 'fitness',
+      'clothing': 'shirt',
+      'electronics': 'phone-portrait',
+      'insurance': 'shield-checkmark',
+      'subscription': 'repeat',
+      'gift': 'gift',
+      'default': 'wallet',
+    };
+    
+    const normalizedCategory = category.toLowerCase().replace(/[^a-z]/g, '');
+    for (const [key, icon] of Object.entries(categoryMap)) {
+      if (normalizedCategory.includes(key)) {
+        return icon;
+      }
+    }
+    return categoryMap['default'];
+  };
+
   const [period, setPeriod] = useState<'monthly'>('monthly');
 
   useEffect(() => {
@@ -100,91 +137,80 @@ export const BudgetScreen = ({ navigation }: Props) => {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
+      {/* Header - matching Transaction page style */}
+      <LinearGradient
+        colors={[colors.background, colors.backgroundSecondary]}
+        style={styles.header}
+      >
+        <View style={styles.headerTop}>
           <Text style={styles.title}>Budget</Text>
-          <Text style={styles.subtitle}>Track your spending limits</Text>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={handleAddBudget}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={colors.gradientPrimary}
+              style={styles.addButtonGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Ionicons name="add" size={24} color={colors.white} />
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.addButton} onPress={handleAddBudget}>
-          <Text style={styles.addButtonText}>+ Add</Text>
-        </TouchableOpacity>
-      </View>
 
-      {/* Monthly Budget Overview */}
-      <View>
-        <LinearGradient
-          colors={[colors.primary, colors.secondary]}
-          style={styles.overviewCard}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Text style={styles.overviewLabel}>Monthly Budget</Text>
-          <Text style={styles.overviewAmount}>
-            {formatCurrencySimple(budgetData.monthly.total)}
-          </Text>
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${Math.min(parseFloat(budgetData.monthly.percentage), 100)}%` },
-                ]}
-              />
+        {/* Monthly Budget Overview - matching Transaction summary cards */}
+        <View style={styles.summaryContainer}>
+          <View style={styles.summaryCard}>
+            <View style={[styles.summaryIconContainer, { backgroundColor: colors.accent + '15' }]}>
+              <Ionicons name="wallet" size={20} color={colors.accent} />
             </View>
-            <Text style={styles.progressPercentage}>
-              {parseFloat(budgetData.monthly.percentage).toFixed(1)}%
-            </Text>
-          </View>
-          <View style={styles.overviewRow}>
-            <View style={styles.overviewItem}>
-              <Text style={styles.overviewItemLabel}>Spent</Text>
-              <Text style={styles.overviewItemValue}>
-                {formatCurrencySimple(budgetData.monthly.spent)}
-              </Text>
-            </View>
-            <View style={styles.overviewDivider} />
-            <View style={styles.overviewItem}>
-              <Text style={styles.overviewItemLabel}>Remaining</Text>
-              <Text style={styles.overviewItemValue}>
-                {formatCurrencySimple(budgetData.monthly.remaining)}
+            <View style={styles.summaryInfo}>
+              <Text style={styles.summaryLabel}>Total Budget</Text>
+              <Text style={[styles.summaryAmount, { color: colors.accent }]}>
+                ₹{budgetData.monthly.total.toLocaleString('en-IN')}
               </Text>
             </View>
           </View>
-        </LinearGradient>
-      </View>
+          <View style={styles.summaryCard}>
+            <View style={[styles.summaryIconContainer, { backgroundColor: colors.expense + '15' }]}>
+              <Ionicons name="trending-up" size={20} color={colors.expense} />
+            </View>
+            <View style={styles.summaryInfo}>
+              <Text style={styles.summaryLabel}>Spent</Text>
+              <Text style={[styles.summaryAmount, { color: colors.expense }]}>
+                ₹{budgetData.monthly.spent.toLocaleString('en-IN')}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </LinearGradient>
 
-      {/* Warning Cards */}
+      {/* Warning Cards - updated styling */}
       {budgetData.warnings && budgetData.warnings.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>⚠️ Budget Alerts</Text>
+          <Text style={styles.sectionTitle}>Budget Alerts</Text>
           {budgetData.warnings.map((warning, index) => (
-            <View
-              key={warning.id}
-              style={[
-                styles.warningCard,
-                {
-                  backgroundColor:
-                    warning.severity === 'high'
-                      ? colors.error + '15'
-                      : colors.warning + '15',
-                },
-              ]}
-            >
-              <Text style={styles.warningEmoji}>{warning.emoji}</Text>
+            <View key={warning.id} style={styles.warningCard}>
+              <View style={[
+                styles.warningIconContainer,
+                { backgroundColor: warning.severity === 'high' ? colors.error + '20' : colors.warning + '20' }
+              ]}>
+                <Ionicons 
+                  name={warning.severity === 'high' ? 'warning' : 'alert-circle'} 
+                  size={24} 
+                  color={warning.severity === 'high' ? colors.error : colors.warning} 
+                />
+              </View>
               <View style={styles.warningContent}>
                 <Text style={styles.warningCategory}>{warning.category}</Text>
                 <Text style={styles.warningMessage}>{warning.message}</Text>
               </View>
-              <View
-                style={[
-                  styles.severityBadge,
-                  {
-                    backgroundColor:
-                      warning.severity === 'high' ? colors.error : colors.warning,
-                  },
-                ]}
-              >
+              <View style={[
+                styles.severityBadge,
+                { backgroundColor: warning.severity === 'high' ? colors.error : colors.warning }
+              ]}>
                 <Text style={styles.severityText}>
                   {warning.severity === 'high' ? 'High' : 'Medium'}
                 </Text>
@@ -194,84 +220,79 @@ export const BudgetScreen = ({ navigation }: Props) => {
         </View>
       )}
 
-      {/* Category Budgets */}
+      {/* Category Budgets - matching Transaction page style */}
       {budgetData.categories && budgetData.categories.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Category Budgets</Text>
-          {budgetData.categories.map((category, index) => (
-            <TouchableOpacity
-              key={category.id}
-              style={styles.categoryCard}
-              onPress={() => handleEditBudget(category.id)}
-            >
-              <View style={styles.categoryHeader}>
-                <View style={styles.categoryLeft}>
-                  <View
-                    style={[
-                      styles.categoryIcon,
-                      { backgroundColor: category.color + '20' },
-                    ]}
-                  >
-                    <Text style={styles.categoryEmoji}>{category.emoji}</Text>
+          {budgetData.categories.map((category, index) => {
+            const categoryIcon = getCategoryIcon(category.name);
+            const categoryColor = getCategoryColor(category.name);
+            
+            return (
+              <TouchableOpacity
+                key={category.id}
+                style={styles.categoryCard}
+                onPress={() => handleEditBudget(category.id)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.categoryHeader}>
+                  <View style={styles.categoryLeft}>
+                    <View style={[styles.categoryIconContainer, { backgroundColor: categoryColor + '20' }]}>
+                      <Ionicons name={categoryIcon as any} size={24} color={categoryColor} />
+                    </View>
+                    <View style={styles.categoryInfo}>
+                      <Text style={styles.categoryName}>{category.name}</Text>
+                      <Text style={styles.categorySubtext}>
+                        ₹{category.spent.toLocaleString('en-IN')} spent
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.categoryInfo}>
-                    <Text style={styles.categoryName}>{category.name}</Text>
-                    <Text style={styles.categorySubtext}>
-                      {formatCurrencySimple(category.spent)} spent
+                  <View style={styles.categoryRight}>
+                    <Text style={styles.categoryAmount}>
+                      ₹{category.budget.toLocaleString('en-IN')}
+                    </Text>
+                    <Text style={[
+                      styles.categoryRemaining,
+                      {
+                        color: parseFloat(category.percentage) > 90 ? colors.error
+                             : parseFloat(category.percentage) > 75 ? colors.warning
+                             : colors.success,
+                      },
+                    ]}>
+                      ₹{category.remaining.toLocaleString('en-IN')} left
                     </Text>
                   </View>
                 </View>
-                <View style={styles.categoryRight}>
-                  <Text style={styles.categoryAmount}>
-                    {formatCurrencySimple(category.budget)}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.categoryRemaining,
-                      {
-                        color:
-                          parseFloat(category.percentage) > 90
-                            ? colors.error
-                            : parseFloat(category.percentage) > 75
-                            ? colors.warning
-                            : colors.success,
-                      },
-                    ]}
-                  >
-                    {formatCurrencySimple(category.remaining)} left
+                <View style={styles.categoryProgressContainer}>
+                  <View style={styles.categoryProgressBar}>
+                    <View
+                      style={[
+                        styles.categoryProgressFill,
+                        {
+                          width: `${Math.min(parseFloat(category.percentage), 100)}%`,
+                          backgroundColor: parseFloat(category.percentage) > 90 ? colors.error
+                                         : parseFloat(category.percentage) > 75 ? colors.warning
+                                         : categoryColor,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.categoryPercentage}>
+                    {parseFloat(category.percentage).toFixed(1)}%
                   </Text>
                 </View>
-              </View>
-              <View style={styles.categoryProgressContainer}>
-                <View style={styles.categoryProgressBar}>
-                  <View
-                    style={[
-                      styles.categoryProgressFill,
-                      {
-                        width: `${Math.min(parseFloat(category.percentage), 100)}%`,
-                        backgroundColor:
-                          parseFloat(category.percentage) > 90
-                            ? colors.error
-                            : parseFloat(category.percentage) > 75
-                            ? colors.warning
-                            : category.color,
-                      },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.categoryPercentage}>
-                  {parseFloat(category.percentage).toFixed(1)}%
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
 
-      {/* Empty State */}
+      {/* Empty State - updated styling */}
       {(!budgetData.categories || budgetData.categories.length === 0) && (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>💰</Text>
+          <View style={styles.emptyIcon}>
+            <Ionicons name="wallet-outline" size={64} color={colors.textSecondary} />
+          </View>
           <Text style={styles.emptyText}>No budgets yet</Text>
           <Text style={styles.emptySubtext}>Start by creating your first budget</Text>
           <TouchableOpacity style={styles.emptyButton} onPress={handleAddBudget}>
@@ -353,131 +374,108 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  
+  // Header - matching Transaction page
   header: {
+    paddingTop: spacing.huge,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
+  },
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.lg,
-    paddingTop: spacing.xl,
+    marginBottom: spacing.xl,
   },
   title: {
-    ...typography.h1,
+    ...typography.displaySmall,
     color: colors.text,
   },
-  subtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
   addButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 20,
+    borderRadius: borderRadius.round,
+    ...shadows.md,
   },
-  addButtonText: {
-    color: colors.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  overviewCard: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: 16,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  overviewLabel: {
-    ...typography.body,
-    color: colors.white,
-    opacity: 0.9,
-    marginBottom: spacing.xs,
-  },
-  overviewAmount: {
-    fontSize: 40,
-    fontWeight: 'bold',
-    color: colors.white,
-    marginBottom: spacing.md,
-  },
-  progressContainer: {
-    flexDirection: 'row',
+  addButtonGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.md,
   },
-  progressBar: {
+  
+  // Summary Cards - matching Transaction page
+  summaryContainer: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  summaryCard: {
     flex: 1,
-    height: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 4,
-    overflow: 'hidden',
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    padding: spacing.base,
+    borderRadius: borderRadius.xl,
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+  summaryIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: spacing.sm,
   },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.white,
-    borderRadius: 4,
-  },
-  progressPercentage: {
-    ...typography.body,
-    color: colors.white,
-    fontWeight: '600',
-    minWidth: 50,
-  },
-  overviewRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  overviewItem: {
+  summaryInfo: {
     flex: 1,
   },
-  overviewItemLabel: {
+  summaryLabel: {
     ...typography.caption,
-    color: colors.white,
-    opacity: 0.8,
-    marginBottom: spacing.xs,
+    color: colors.textSecondary,
+    marginBottom: spacing.xxs,
   },
-  overviewItemValue: {
-    ...typography.h3,
-    color: colors.white,
-    fontWeight: 'bold',
+  summaryAmount: {
+    ...typography.titleLarge,
+    fontWeight: '700',
   },
-  overviewDivider: {
-    width: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    marginHorizontal: spacing.md,
-  },
+  
+  // Section
   section: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.lg,
   },
   sectionTitle: {
-    ...typography.h3,
+    ...typography.titleLarge,
     color: colors.text,
+    fontWeight: '600',
     marginBottom: spacing.md,
   },
+  
+  // Warning Cards - matching surface style
   warningCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: colors.surface,
     padding: spacing.md,
-    borderRadius: 12,
+    borderRadius: borderRadius.xl,
     marginBottom: spacing.sm,
+    ...shadows.sm,
   },
-  warningEmoji: {
-    fontSize: 24,
+  warningIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: spacing.md,
   },
   warningContent: {
     flex: 1,
   },
   warningCategory: {
-    ...typography.body,
+    ...typography.titleMedium,
     color: colors.text,
     fontWeight: '600',
-    marginBottom: 2,
+    marginBottom: spacing.xxs,
   },
   warningMessage: {
     ...typography.caption,
@@ -485,25 +483,22 @@ const styles = StyleSheet.create({
   },
   severityBadge: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.round,
   },
   severityText: {
     ...typography.caption,
     color: colors.white,
-    fontSize: 10,
     fontWeight: 'bold',
   },
+  
+  // Category Cards - matching Transaction page
   categoryCard: {
-    backgroundColor: colors.white,
-    padding: spacing.md,
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    padding: spacing.base,
+    borderRadius: borderRadius.xl,
     marginBottom: spacing.sm,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    ...shadows.sm,
   },
   categoryHeader: {
     flexDirection: 'row',
@@ -516,25 +511,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  categoryIcon: {
+  categoryIconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: borderRadius.md,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
-  },
-  categoryEmoji: {
-    fontSize: 24,
   },
   categoryInfo: {
     flex: 1,
   },
   categoryName: {
-    ...typography.body,
+    ...typography.titleMedium,
     color: colors.text,
-    fontWeight: '600',
-    marginBottom: 2,
+    marginBottom: spacing.xxs,
   },
   categorySubtext: {
     ...typography.caption,
@@ -544,10 +535,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   categoryAmount: {
-    ...typography.body,
+    ...typography.titleLarge,
     color: colors.text,
-    fontWeight: 'bold',
-    marginBottom: 2,
+    fontWeight: '700',
+    marginBottom: spacing.xxs,
   },
   categoryRemaining: {
     ...typography.caption,
@@ -559,15 +550,15 @@ const styles = StyleSheet.create({
   },
   categoryProgressBar: {
     flex: 1,
-    height: 8,
-    backgroundColor: colors.surface,
-    borderRadius: 4,
+    height: 6,
+    backgroundColor: colors.border,
+    borderRadius: borderRadius.round,
     overflow: 'hidden',
     marginRight: spacing.sm,
   },
   categoryProgressFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: borderRadius.round,
   },
   categoryPercentage: {
     ...typography.caption,
@@ -576,14 +567,21 @@ const styles = StyleSheet.create({
     minWidth: 45,
     textAlign: 'right',
   },
+  
+  // Empty State - matching Transaction page
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.xl * 3,
+    paddingVertical: spacing.massive,
   },
-  emptyEmoji: {
-    fontSize: 64,
-    marginBottom: spacing.md,
+  emptyIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.xl,
   },
   emptyText: {
     ...typography.h3,
@@ -596,14 +594,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   emptyButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
-    borderRadius: 12,
+    borderRadius: borderRadius.xl,
+    ...shadows.md,
   },
   emptyButtonText: {
+    ...typography.titleMedium,
     color: colors.white,
-    fontSize: 16,
     fontWeight: '600',
   },
   modalOverlay: {
