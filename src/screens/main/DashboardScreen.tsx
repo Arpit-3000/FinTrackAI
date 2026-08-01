@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Audio } from 'expo-av';
 import { colors, spacing, typography } from '../../theme';
 import {
   StatCard,
@@ -11,7 +12,7 @@ import {
   SkeletonLoader,
   ErrorView,
 } from '../../components';
-import { analyticsService } from '../../services';
+import { analyticsService, transactionService } from '../../services';
 import { formatCurrency } from '../../utils';
 import { API_BASE_URL } from '../../constants';
 import { useAuthStore } from '../../store/authStore';
@@ -31,34 +32,130 @@ export const DashboardScreen = ({ navigation }: Props) => {
     loadDashboardData();
   }, []);
 
+  const calculateFromTransactions = async () => {
+    console.log('📊 Calculating dashboard data from transactions...');
+    
+    try {
+      const transactionsResponse = await transactionService.getTransactions({ limit: 1000 });
+      const transactions = transactionsResponse.data || [];
+      
+      console.log(`📝 Found ${transactions.length} transactions`);
+      
+      if (transactions.length === 0) {
+        console.log('⚠️ No transactions found');
+        return {
+          summary: {
+            income: '0',
+            expense: '0',
+            savings: '0',
+            savingsRate: '0',
+          },
+          recentTransactions: [],
+          monthlySpending: [],
+          categoryBreakdown: [],
+        };
+      }
+      
+      // Calculate totals
+      let totalIncome = 0;
+      let totalExpense = 0;
+      
+      transactions.forEach(t => {
+        const amount = Math.abs(Number(t.amount) || 0);
+        if (t.type === 'income') {
+          totalIncome += amount;
+        } else if (t.type === 'expense') {
+          totalExpense += amount;
+        }
+      });
+      
+      const savings = totalIncome - totalExpense;
+      const savingsRate = totalIncome > 0 ? ((savings / totalIncome) * 100).toFixed(1) : '0';
+      
+      console.log('💰 Calculated Totals:', {
+        income: totalIncome,
+        expense: totalExpense,
+        savings: savings,
+        savingsRate: savingsRate + '%'
+      });
+      
+      // Get category breakdown for expenses
+      const categoryMap = new Map<string, { amount: number; count: number }>();
+      
+      transactions
+        .filter(t => t.type === 'expense')
+        .forEach(t => {
+          const amount = Math.abs(Number(t.amount) || 0);
+          const existing = categoryMap.get(t.category) || { amount: 0, count: 0 };
+          categoryMap.set(t.category, {
+            amount: existing.amount + amount,
+            count: existing.count + 1
+          });
+        });
+      
+      const categoryBreakdown = Array.from(categoryMap.entries())
+        .map(([category, data]) => ({
+          category,
+          amount: data.amount,
+          count: data.count,
+          percentage: totalExpense > 0 ? ((data.amount / totalExpense) * 100).toFixed(1) : '0'
+        }))
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 5);
+      
+      // Get monthly spending for last 6 months
+      const now = new Date();
+      const monthlyMap = new Map<string, number>();
+      
+      transactions
+        .filter(t => t.type === 'expense')
+        .forEach(t => {
+          const date = new Date(t.date);
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          const amount = Math.abs(Number(t.amount) || 0);
+          monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + amount);
+        });
+      
+      const monthlySpending = Array.from(monthlyMap.entries())
+        .map(([month, amount]) => ({ month, amount }))
+        .sort((a, b) => a.month.localeCompare(b.month))
+        .slice(-6);
+      
+      return {
+        summary: {
+          income: totalIncome.toString(),
+          expense: totalExpense.toString(),
+          savings: savings.toString(),
+          savingsRate: savingsRate,
+        },
+        recentTransactions: transactions.slice(0, 5),
+        monthlySpending,
+        categoryBreakdown,
+      };
+    } catch (err) {
+      console.error('❌ Error calculating from transactions:', err);
+      throw err;
+    }
+  };
+
   const loadDashboardData = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log('🏠 Fetching dashboard data from backend...');
+      console.log('🏠 Loading dashboard data...');
       console.log('API URL:', API_BASE_URL);
       
-      const data = await analyticsService.getDashboard();
+      // Always calculate from transactions first
+      const calculatedData = await calculateFromTransactions();
       
-      console.log('✅ Dashboard data received:', JSON.stringify(data, null, 2));
+      console.log('✅ Dashboard data ready:', calculatedData);
       
-      setDashboardData(data);
+      setDashboardData(calculatedData);
+      
     } catch (err: any) {
       console.error('❌ Error loading dashboard:', err);
-      
-      // Better error message
-      let errorMessage = 'Failed to load dashboard';
-      
-      if (err.message?.includes('Network')) {
-        errorMessage = 'Cannot connect to backend server.\n\nPlease ensure:\n1. Backend server is running\n2. API URL is correct\n3. Internet connection is active';
-      } else if (err.message?.includes('401') || err.message?.includes('Unauthorized')) {
-        errorMessage = 'Please login again';
-      } else {
-        errorMessage = err.message || 'Failed to load dashboard';
-      }
-      
-      setError(errorMessage);
+      setError(err.message || 'Failed to load dashboard');
     } finally {
       setLoading(false);
     }
@@ -100,6 +197,45 @@ export const DashboardScreen = ({ navigation }: Props) => {
   const handleAddTransaction = () => {
     // @ts-ignore - navigation works at runtime
     navigation.navigate('AddTransaction', {});
+  };
+
+  const playNotificationSound = async () => {
+    try {
+      // Set audio mode for playing sounds
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+      });
+      
+      // Create and play notification sound
+      const { sound } = await Audio.Sound.createAsync(
+        // Using a notification bell/ting sound from online source
+        { uri: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' },
+        { shouldPlay: true, volume: 0.8 }
+      );
+      
+      console.log('🔔 Playing notification sound');
+      
+      // Unload sound after playing to free memory
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+          console.log('✅ Sound finished and unloaded');
+        }
+      });
+    } catch (error) {
+      console.error('❌ Could not play sound:', error);
+      // Silent fail - don't disrupt user experience
+    }
+  };
+
+  const handleNotificationPress = async () => {
+    await playNotificationSound();
+    Alert.alert(
+      'Notifications 🔔',
+      'No new notifications',
+      [{ text: 'OK' }]
+    );
   };
 
   if (loading) {
@@ -147,7 +283,11 @@ export const DashboardScreen = ({ navigation }: Props) => {
                 <Text style={styles.greeting}>{getGreeting()}</Text>
                 <Text style={styles.username}>{user?.name || 'User'}</Text>
               </View>
-              <TouchableOpacity style={styles.notificationButton}>
+              <TouchableOpacity 
+                style={styles.notificationButton}
+                onPress={handleNotificationPress}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.notificationIcon}>🔔</Text>
               </TouchableOpacity>
             </View>

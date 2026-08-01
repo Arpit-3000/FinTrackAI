@@ -21,10 +21,23 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.arpit_1323.FinTrackAInew"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "fd37f98c-0a29-4331-b14a-3dc97198ad33"
+      }
+    },
+    "owner": "arpit_1323",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/fd37f98c-0a29-4331-b14a-3dc97198ad33"
     }
   }
 }
