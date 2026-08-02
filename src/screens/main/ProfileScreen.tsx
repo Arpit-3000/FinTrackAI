@@ -1,25 +1,24 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, spacing, typography } from '../../theme';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, spacing, typography, borderRadius, shadows } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore } from '../../store/authStore';
-import { useTheme } from '../../contexts/ThemeContext';
 
 export const ProfileScreen = () => {
   const { logout } = useAuth();
   const { user } = useAuthStore();
-  const { isDark, themeMode, setThemeMode } = useTheme();
 
-  // Static menu items
+  // Premium menu items with Ionicons
   const menuItems = [
-    { id: 'profile', icon: '👤', title: 'Edit Profile', subtitle: 'Update your information' },
-    { id: 'notifications', icon: '🔔', title: 'Notifications', subtitle: 'Manage alerts' },
-    { id: 'security', icon: '🔒', title: 'Security', subtitle: 'Password & privacy' },
-    { id: 'payment', icon: '💳', title: 'Payment Methods', subtitle: 'Manage cards' },
-    { id: 'export', icon: '📤', title: 'Export Data', subtitle: 'Download your data' },
-    { id: 'help', icon: '❓', title: 'Help & Support', subtitle: 'Get assistance' },
-    { id: 'about', icon: 'ℹ️', title: 'About', subtitle: 'Version & info' },
+    { id: 'profile', icon: 'person-outline', title: 'Edit Profile', subtitle: 'Update your information', color: colors.accent },
+    { id: 'notifications', icon: 'notifications-outline', title: 'Notifications', subtitle: 'Manage alerts', color: colors.warning },
+    { id: 'security', icon: 'shield-checkmark-outline', title: 'Security', subtitle: 'Password & privacy', color: colors.success },
+    { id: 'payment', icon: 'card-outline', title: 'Payment Methods', subtitle: 'Manage cards', color: colors.chartBlue },
+    { id: 'export', icon: 'download-outline', title: 'Export Data', subtitle: 'Download your data', color: colors.info },
+    { id: 'help', icon: 'help-circle-outline', title: 'Help & Support', subtitle: 'Get assistance', color: colors.chartPurple },
+    { id: 'about', icon: 'information-circle-outline', title: 'About', subtitle: 'Version & info', color: colors.textSecondary },
   ];
 
   const handleMenuPress = (itemId: string) => {
@@ -68,64 +67,39 @@ export const ProfileScreen = () => {
       { cancelable: true },
     );
   };
-
-  const handleDarkModeToggle = (value: boolean) => {
-    // Toggle between light and dark mode
-    setThemeMode(value ? 'dark' : 'light');
-    Alert.alert(
-      'Theme Changed', 
-      `${value ? 'Dark' : 'Light'} mode enabled!`,
-      [{ text: 'OK' }]
-    );
-  };
-
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header with Gradient */}
-      <View>
-        <LinearGradient
-          colors={[colors.primary, colors.secondary]}
-          style={styles.header}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
+      {/* Header - matching Transaction page style */}
+      <LinearGradient
+        colors={[colors.background, colors.backgroundSecondary]}
+        style={styles.header}
+      >
+        <View style={styles.headerTop}>
+          <Text style={styles.title}>Profile</Text>
+          <TouchableOpacity style={styles.editButton}>
+            <Ionicons name="settings-outline" size={24} color={colors.accent} />
+          </TouchableOpacity>
+        </View>
+
+        {/* User Info Card */}
+        <View style={styles.userCard}>
           <View style={styles.avatarContainer}>
-            <Text style={styles.avatar}>{user?.avatar || '👤'}</Text>
+            <Text style={styles.avatar}>{user?.name?.charAt(0) || 'U'}</Text>
           </View>
-          <Text style={styles.name}>{user?.name || 'User'}</Text>
-          <Text style={styles.email}>{user?.email || 'user@example.com'}</Text>
-          {user?.verified && (
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedText}>✓ Verified</Text>
-            </View>
-          )}
-        </LinearGradient>
-      </View>
-
-
-
-      {/* Dark Mode Toggle */}
-      <View style={styles.darkModeCard}>
-        <View style={styles.darkModeLeft}>
-          <View style={styles.darkModeIcon}>
-            <Text style={styles.darkModeEmoji}>{isDark ? '🌙' : '☀️'}</Text>
-          </View>
-          <View>
-            <Text style={styles.darkModeTitle}>Dark Mode</Text>
-            <Text style={styles.darkModeSubtitle}>
-              {isDark ? 'Dark theme enabled' : 'Light theme enabled'}
-            </Text>
+          <View style={styles.userInfo}>
+            <Text style={styles.name}>{user?.name || 'User'}</Text>
+            <Text style={styles.email}>{user?.email || 'user@example.com'}</Text>
+            {user?.verified && (
+              <View style={styles.verifiedBadge}>
+                <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+                <Text style={styles.verifiedText}>Verified</Text>
+              </View>
+            )}
           </View>
         </View>
-        <Switch
-          value={isDark}
-          onValueChange={handleDarkModeToggle}
-          trackColor={{ false: colors.border, true: colors.primary }}
-          thumbColor={colors.white}
-        />
-      </View>
+      </LinearGradient>
 
-      {/* Menu Items */}
+      {/* Menu Items - matching Transaction page style */}
       <View style={styles.menuContainer}>
         {menuItems.map((item) => (
           <TouchableOpacity
@@ -135,26 +109,27 @@ export const ProfileScreen = () => {
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>
-              <View style={styles.menuIcon}>
-                <Text style={styles.menuEmoji}>{item.icon}</Text>
+              <View style={[styles.menuIcon, { backgroundColor: item.color + '20' }]}>
+                <Ionicons name={item.icon as any} size={24} color={item.color} />
               </View>
               <View style={styles.menuText}>
                 <Text style={styles.menuTitle}>{item.title}</Text>
                 <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
               </View>
             </View>
-            <Text style={styles.menuArrow}>›</Text>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Logout Button */}
+      {/* Logout Button - updated styling */}
       <TouchableOpacity
         style={styles.logoutButton}
         onPress={handleLogout}
         activeOpacity={0.8}
       >
-        <Text style={styles.logoutText}>🚪 Logout</Text>
+        <Ionicons name="log-out-outline" size={20} color={colors.white} />
+        <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
 
       {/* Version */}
@@ -169,114 +144,100 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  
+  // Header - matching Transaction page
   header: {
-    padding: spacing.xl,
-    paddingTop: spacing.xl * 1.5,
-    paddingBottom: spacing.xl * 2,
-    alignItems: 'center',
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    paddingTop: spacing.huge,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
-  avatarContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  avatar: {
-    fontSize: 50,
-  },
-  name: {
-    ...typography.h2,
-    color: colors.white,
-    marginBottom: spacing.xs,
-    fontWeight: 'bold',
-  },
-  email: {
-    ...typography.body,
-    color: colors.white,
-    opacity: 0.9,
-    marginBottom: spacing.sm,
-  },
-  verifiedBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: 16,
-  },
-  verifiedText: {
-    ...typography.caption,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  darkModeCard: {
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: colors.white,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
-    padding: spacing.md,
-    borderRadius: 12,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    marginBottom: spacing.xl,
   },
-  darkModeLeft: {
-    flexDirection: 'row',
+  title: {
+    ...typography.displaySmall,
+    color: colors.text,
+  },
+  editButton: {
+    width: 48,
+    height: 48,
+    backgroundColor: 'rgba(198, 122, 77, 0.15)',
+    borderRadius: 24,
+    justifyContent: 'center',
     alignItems: 'center',
-    flex: 1,
   },
-  darkModeIcon: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
+  
+  // User Card - matching Transaction page style
+  userCard: {
+    flexDirection: 'row',
     backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: borderRadius.xl,
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+  avatarContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
   },
-  darkModeEmoji: {
-    fontSize: 20,
+  avatar: {
+    ...typography.h2,
+    color: colors.white,
+    fontWeight: '700',
   },
-  darkModeTitle: {
-    ...typography.body,
+  userInfo: {
+    flex: 1,
+  },
+  name: {
+    ...typography.titleLarge,
     color: colors.text,
-    fontWeight: '600',
-    marginBottom: 2,
+    fontWeight: '700',
+    marginBottom: spacing.xxs,
   },
-  darkModeSubtitle: {
-    ...typography.caption,
+  email: {
+    ...typography.body,
     color: colors.textSecondary,
+    marginBottom: spacing.xs,
   },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.success + '15',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.round,
+    alignSelf: 'flex-start',
+  },
+  verifiedText: {
+    ...typography.caption,
+    color: colors.success,
+    fontWeight: '600',
+    marginLeft: spacing.xxs,
+  },
+  
+  // Menu Items - matching Transaction page
   menuContainer: {
     paddingHorizontal: spacing.lg,
+    marginTop: spacing.xl,
     marginBottom: spacing.lg,
   },
   menuItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: colors.white,
-    padding: spacing.md,
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    padding: spacing.base,
+    borderRadius: borderRadius.xl,
     marginBottom: spacing.sm,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    ...shadows.sm,
   },
   menuLeft: {
     flexDirection: 'row',
@@ -284,53 +245,47 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   menuIcon: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
-    backgroundColor: colors.surface,
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
-  },
-  menuEmoji: {
-    fontSize: 20,
   },
   menuText: {
     flex: 1,
   },
   menuTitle: {
-    ...typography.body,
+    ...typography.titleMedium,
     color: colors.text,
     fontWeight: '600',
-    marginBottom: 2,
+    marginBottom: spacing.xxs,
   },
   menuSubtitle: {
     ...typography.caption,
     color: colors.textSecondary,
   },
-  menuArrow: {
-    fontSize: 24,
-    color: colors.textSecondary,
-    fontWeight: '300',
-  },
+  
+  // Logout Button - matching Transaction page
   logoutButton: {
+    flexDirection: 'row',
     backgroundColor: colors.error,
     marginHorizontal: spacing.lg,
     padding: spacing.md,
-    borderRadius: 12,
+    borderRadius: borderRadius.xl,
     alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: spacing.md,
-    shadowColor: colors.error,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    ...shadows.md,
+    gap: spacing.sm,
   },
   logoutText: {
+    ...typography.titleMedium,
     color: colors.white,
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
+  
+  // Version info
   version: {
     ...typography.caption,
     color: colors.textSecondary,

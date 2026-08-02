@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Modal, Scrol
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
-import { SearchBar, FilterChip, SkeletonLoader, ErrorView } from '../../components';
+import { SearchBar, FilterChip, SkeletonLoader, ErrorView, LoadingOverlay } from '../../components';
 import { transactionService } from '../../services';
 import { formatCurrency } from '../../utils';
 import { API_BASE_URL } from '../../constants';
@@ -186,16 +186,14 @@ export const TransactionsScreen = ({ navigation }: Props) => {
     );
   };
 
-  if (loading) {
-    return <SkeletonLoader />;
-  }
-
-  if (error) {
+  // Don't show error during initial load
+  if (error && !loading) {
     return <ErrorView message={error} onRetry={loadTransactions} />;
   }
 
   return (
     <View style={styles.container}>
+      <LoadingOverlay visible={loading} message="Loading Transactions..." />
       {/* Header */}
       <LinearGradient
         colors={[colors.background, colors.backgroundSecondary]}

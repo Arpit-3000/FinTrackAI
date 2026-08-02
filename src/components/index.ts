@@ -10,3 +10,5 @@ export { FilterChip } from './FilterChip';
 export { SkeletonLoader, SkeletonCard, SkeletonTransaction, SkeletonStatCard } from './SkeletonLoader';
 export { EmptyState } from './EmptyState';
 export { ErrorView } from './ErrorView';
+export { LoadingOverlay } from './LoadingOverlay';
+export { ErrorBoundary } from './ErrorBoundary';

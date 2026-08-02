@@ -9,7 +9,7 @@ export const SplashScreen = () => {
       style={styles.container}
     >
       <View style={styles.content}>
-        <Text style={styles.logo}>💰</Text>
+        <Text style={styles.logo}>₹</Text>
         <Text style={styles.title}>FinTrack AI</Text>
         <Text style={styles.subtitle}>Smart Financial Management</Text>
         <ActivityIndicator

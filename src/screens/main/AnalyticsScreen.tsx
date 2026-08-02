@@ -13,8 +13,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../../theme';
 import { analyticsService } from '../../services';
+import { SkeletonLoader, ErrorView, LoadingOverlay } from '../../components';
 import { formatCurrency, formatCurrencySimple } from '../../utils';
-import { SkeletonLoader, ErrorView } from '../../components';
 import type { MonthlyComparison, TopCategory } from '../../types';
 
 const screenWidth = Dimensions.get('window').width;
@@ -118,12 +118,14 @@ export const AnalyticsScreen = () => {
     }
   };
 
-  if (loading) {
-    return <SkeletonLoader />;
+  // Don't show error during initial load
+  if (error && !loading) {
+    return <ErrorView message={error} onRetry={loadAnalytics} />;
   }
 
-  if (error || !comparison) {
-    return <ErrorView message={error || 'Failed to load analytics'} onRetry={loadAnalytics} />;
+  // Show nothing if still loading initial data
+  if (!comparison) {
+    return null;
   }
 
   const incomeChange = comparison.changes.income.amount;
@@ -147,6 +149,7 @@ export const AnalyticsScreen = () => {
 
   return (
     <View style={styles.container}>
+      <LoadingOverlay visible={loading} message="Loading Analytics..." />
       {/* Header - matching Transaction page style */}
       <LinearGradient
         colors={[colors.background, colors.backgroundSecondary]}

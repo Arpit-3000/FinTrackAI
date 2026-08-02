@@ -13,7 +13,7 @@ import { Audio } from 'expo-av';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Line, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
-import { SkeletonLoader, ErrorView } from '../../components';
+import { SkeletonLoader, ErrorView, LoadingOverlay } from '../../components';
 import { transactionService } from '../../services';
 import { formatCurrency } from '../../utils';
 import { useAuthStore } from '../../store/authStore';
@@ -182,11 +182,16 @@ export const DashboardScreen = ({ navigation }: Props) => {
         .sort((a, b) => b.amount - a.amount)
         .slice(0, 4);
 
+      // Get current month/year for card valid thru
+      const now = new Date();
+      const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+      const currentYear = String(now.getFullYear()).slice(-2);
+
       setDashboardData({
         balance,
         cardNumber: '**** **** **** 0023',
         cardHolder: user?.name || 'User',
-        validThru: '08/25',
+        validThru: `${currentMonth}/${currentYear}`,
         weeklyData,
         recentTransactions: transactions.slice(0, 5),
         weeklyChange,
@@ -244,12 +249,14 @@ export const DashboardScreen = ({ navigation }: Props) => {
     navigation.navigate('Profile');
   };
 
-  if (loading) {
-    return <SkeletonLoader />;
+  // Don't show error during initial load, only if data failed after loading attempt
+  if (error && !loading) {
+    return <ErrorView message={error} onRetry={loadDashboardData} />;
   }
 
-  if (error || !dashboardData) {
-    return <ErrorView message={error || 'Failed to load dashboard'} onRetry={loadDashboardData} />;
+  // Show nothing if still loading initial data
+  if (!dashboardData) {
+    return null;
   }
 
   // Find min and max for chart scaling
@@ -259,6 +266,7 @@ export const DashboardScreen = ({ navigation }: Props) => {
 
   return (
     <View style={styles.container}>
+      <LoadingOverlay visible={loading} message="Loading Dashboard..." />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Dark Header */}
         <View style={styles.darkHeader}>
@@ -478,11 +486,21 @@ export const DashboardScreen = ({ navigation }: Props) => {
                   const wednesdayIndex = dashboardData.weeklyData.findIndex((d) => d.day === 'Wed');
                   if (wednesdayIndex !== -1) {
                     const wedData = dashboardData.weeklyData[wednesdayIndex];
+                    // Calculate the actual Wednesday date
+                    const today = new Date();
+                    const wednesdayDate = new Date(today);
+                    wednesdayDate.setDate(today.getDate() - (6 - wednesdayIndex));
+                    const formattedDate = wednesdayDate.toLocaleDateString('en-US', { 
+                      day: 'numeric', 
+                      month: 'short', 
+                      year: 'numeric' 
+                    });
+                    
                     return (
                       <View style={styles.tooltipContainer}>
                         <View style={styles.tooltip}>
-                          <Text style={styles.tooltipAmount}>-₹{wedData.amount.toFixed(2)}</Text>
-                          <Text style={styles.tooltipDate}>3 Jan, 2025</Text>
+                          <Text style={styles.tooltipAmount}>₹{wedData.amount.toFixed(2)}</Text>
+                          <Text style={styles.tooltipDate}>{formattedDate}</Text>
                         </View>
                       </View>
                     );

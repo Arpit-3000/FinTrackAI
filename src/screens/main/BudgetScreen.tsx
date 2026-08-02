@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../../theme';
 import { budgetService } from '../../services';
 import { formatCurrency, formatCurrencySimple } from '../../utils';
-import { SkeletonLoader, ErrorView, LoadingButton } from '../../components';
+import { SkeletonLoader, ErrorView, LoadingButton, LoadingOverlay } from '../../components';
 import type { BudgetSummary, CreateBudgetData } from '../../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { MainTabParamList } from '../../types/navigation';
@@ -127,16 +127,20 @@ export const BudgetScreen = ({ navigation }: Props) => {
     Alert.alert('Edit Budget', `Edit budget for category ${categoryId} - Coming soon!`);
   };
 
-  if (loading) {
-    return <SkeletonLoader />;
+  // Don't show error during initial load
+  if (error && !loading) {
+    return <ErrorView message={error} onRetry={loadBudgetData} />;
   }
 
-  if (error || !budgetData) {
-    return <ErrorView message={error || 'Failed to load budgets'} onRetry={loadBudgetData} />;
+  // Show nothing if still loading initial data
+  if (!budgetData) {
+    return null;
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <View style={{ flex: 1 }}>
+      <LoadingOverlay visible={loading} message="Loading Budget..." />
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header - matching Transaction page style */}
       <LinearGradient
         colors={[colors.background, colors.backgroundSecondary]}
@@ -366,6 +370,7 @@ export const BudgetScreen = ({ navigation }: Props) => {
         </View>
       </Modal>
     </ScrollView>
+    </View>
   );
 };
 
@@ -605,6 +610,8 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: '600',
   },
+  
+  // Modal - matching Transaction page
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -618,15 +625,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '60%',
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 12,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: borderRadius.xxl,
+    borderTopRightRadius: borderRadius.xxl,
+    maxHeight: '75%',
+    ...shadows.xl,
   },
   modalScroll: {
     padding: spacing.lg,
@@ -635,63 +638,68 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     backgroundColor: colors.border,
-    borderRadius: 2,
+    borderRadius: borderRadius.round,
     alignSelf: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   modalTitle: {
     ...typography.h2,
     color: colors.text,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
+    textAlign: 'center',
   },
   formGroup: {
     marginBottom: spacing.lg,
   },
   formLabel: {
-    ...typography.body,
+    ...typography.titleMedium,
     color: colors.text,
     fontWeight: '600',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   formInput: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.xl,
     padding: spacing.md,
     fontSize: 16,
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
+    ...shadows.sm,
   },
   modalButtons: {
     flexDirection: 'row',
     gap: spacing.md,
-    marginTop: spacing.md,
+    marginTop: spacing.xl,
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.backgroundSecondary,
     padding: spacing.md,
-    borderRadius: 12,
+    borderRadius: borderRadius.xl,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   cancelButtonText: {
+    ...typography.titleMedium,
     color: colors.text,
-    fontSize: 16,
     fontWeight: '600',
   },
   createButton: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     padding: spacing.md,
-    borderRadius: 12,
+    borderRadius: borderRadius.xl,
     alignItems: 'center',
+    ...shadows.md,
   },
   createButtonDisabled: {
     opacity: 0.6,
   },
   createButtonText: {
+    ...typography.titleMedium,
     color: colors.white,
-    fontSize: 16,
     fontWeight: '600',
   },
 });

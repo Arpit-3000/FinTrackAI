@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../../theme';
-import { Input, LoadingButton, FilterChip } from '../../components';
+import { Input, LoadingButton, FilterChip, LoadingOverlay } from '../../components';
 import { transactionService } from '../../services';
 import type { CreateTransactionData, Transaction } from '../../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -348,7 +348,7 @@ export const AddTransactionScreen = ({ navigation, route }: Props) => {
                     method.icon,
                     method.iconType,
                     selectedPaymentMethod === method.id ? colors.white : method.color,
-                    20
+                    24
                   )}
                 </View>
                 <Text style={[
@@ -647,20 +647,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   
-  // Payment Method
+  // Payment Method - 2x2 Grid
   paymentMethodContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -spacing.xs,
+    gap: spacing.md,
   },
   paymentMethodCard: {
-    width: '48%',
+    width: '47%',
     backgroundColor: colors.surface,
     padding: spacing.md,
     borderRadius: borderRadius.xl,
-    flexDirection: 'row',
     alignItems: 'center',
-    margin: spacing.xs,
     borderWidth: 2,
     borderColor: 'transparent',
     ...shadows.sm,
@@ -670,18 +668,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundSecondary,
   },
   paymentIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
   },
   paymentMethodName: {
     ...typography.titleSmall,
     color: colors.text,
     fontWeight: '600',
-    flex: 1,
+    textAlign: 'center',
   },
   paymentMethodNameSelected: {
     color: colors.accent,
