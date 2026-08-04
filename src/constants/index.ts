@@ -1,10 +1,31 @@
 // API Configuration
-// Update this based on your environment:
-// - iOS Simulator: http://localhost:5000/api
-// - Android Emulator: http://10.0.2.2:5000/api
-// - Physical Device: http://YOUR_IP_ADDRESS:5000/api
-// - Production: https://your-api.com/api
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
+// CRITICAL: Never use localhost in production builds
+// Expo environment variables MUST be prefixed with EXPO_PUBLIC_
+
+const getApiBaseUrl = (): string => {
+  // Log for debugging
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  console.log('🌐 Environment API URL:', envUrl);
+  console.log('🔧 process.env keys:', Object.keys(process.env).filter(k => k.startsWith('EXPO_PUBLIC')));
+  
+  // For production, use the Render URL directly
+  const PRODUCTION_API_URL = 'https://fintrackai-eow9.onrender.com/api';
+  
+  // If environment variable exists and is valid, use it
+  if (envUrl && envUrl.startsWith('http')) {
+    console.log('✅ Using environment API URL:', envUrl);
+    return envUrl;
+  }
+  
+  // Otherwise use production URL (NEVER localhost)
+  console.log('⚠️ Environment variable not found, using production URL:', PRODUCTION_API_URL);
+  return PRODUCTION_API_URL;
+};
+
+export const API_BASE_URL = getApiBaseUrl();
+
+// Log final URL for debugging
+console.log('📡 Final API_BASE_URL:', API_BASE_URL);
 
 export const STORAGE_KEYS = {
   AUTH_TOKEN: '@fintrack_auth_token',

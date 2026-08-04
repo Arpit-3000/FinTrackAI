@@ -12,12 +12,22 @@ class ApiService {
   }> = [];
 
   constructor() {
+    console.log('🔧 ApiService initializing with baseURL:', API_BASE_URL);
+    
     this.client = axios.create({
       baseURL: API_BASE_URL,
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
+    });
+
+    // Log axios config
+    console.log('📡 Axios instance created:', {
+      baseURL: this.client.defaults.baseURL,
+      timeout: this.client.defaults.timeout,
+      headers: this.client.defaults.headers,
     });
 
     this.setupInterceptors();
@@ -31,25 +41,63 @@ class ApiService {
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+        
+        // Log outgoing request
+        console.log('📤 API Request:', {
+          method: config.method?.toUpperCase(),
+          url: config.url,
+          baseURL: config.baseURL,
+          fullURL: `${config.baseURL}${config.url}`,
+          hasToken: !!token,
+        });
+        
         return config;
       },
       (error) => {
+        console.error('❌ Request interceptor error:', error);
         return Promise.reject(error);
       }
     );
 
     // Response interceptor - handle errors
     this.client.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        console.log('📥 API Response:', {
+          url: response.config.url,
+          status: response.status,
+          statusText: response.statusText,
+        });
+        return response;
+      },
       async (error: AxiosError<ApiError>) => {
+        // Enhanced error logging
+        console.error('❌ API Error Details:', {
+          message: error.message,
+          code: error.code,
+          url: error.config?.url,
+          baseURL: error.config?.baseURL,
+          fullURL: error.config ? `${error.config.baseURL}${error.config.url}` : 'unknown',
+          method: error.config?.method,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          responseData: error.response?.data,
+          hasResponse: !!error.response,
+          hasRequest: !!error.request,
+        });
+
         const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
 
-        // Handle network errors
+        // Handle network errors (no response from server)
         if (!error.response) {
-          return Promise.reject({
+          const networkError = {
             success: false,
-            message: 'Network error. Please check your internet connection.',
-          });
+            message: this.getNetworkErrorMessage(error),
+            errorCode: error.code,
+            errorType: 'NETWORK_ERROR',
+          };
+          
+          console.error('🚨 Network Error:', networkError);
+          return Promise.reject(networkError);
         }
 
         // Handle 401 Unauthorized
@@ -86,14 +134,33 @@ class ApiService {
         }
 
         // Return formatted error
-        return Promise.reject({
+        const formattedError = {
           success: false,
           message: error.response.data?.message || 'An error occurred',
           errors: error.response.data?.errors,
           status: error.response.status,
-        });
+        };
+        
+        console.error('⚠️ API Error Response:', formattedError);
+        return Promise.reject(formattedError);
       }
     );
+  }
+
+  private getNetworkErrorMessage(error: AxiosError): string {
+    if (error.code === 'ECONNABORTED') {
+      return 'Request timeout. Please check your internet connection.';
+    }
+    if (error.code === 'ERR_NETWORK') {
+      return 'Network error. Unable to reach server. Please check:\n1. Your internet connection\n2. Server is running\n3. API URL is correct';
+    }
+    if (error.code === 'ENOTFOUND') {
+      return 'Server not found. Please check the API URL.';
+    }
+    if (error.code === 'ECONNREFUSED') {
+      return 'Connection refused. Server may be down.';
+    }
+    return `Network error: ${error.message}. Please check your internet connection and try again.`;
   }
 
   private processQueue(error: unknown) {
