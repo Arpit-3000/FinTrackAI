@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, typography, borderRadius, shadows } from '../../theme';
 import { SkeletonLoader, ErrorView } from '../../components';
 import { transactionService } from '../../services';
@@ -38,9 +39,11 @@ export const DashboardScreen = ({ navigation }: Props) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboardData();
+    }, [])
+  );
 
   const loadDashboardData = async () => {
     try {

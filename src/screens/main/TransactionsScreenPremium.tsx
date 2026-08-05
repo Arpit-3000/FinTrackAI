@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Modal, ScrollView } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import { SearchBar, FilterChip, SkeletonLoader, ErrorView } from '../../components';
 import { transactionService } from '../../services';
@@ -71,9 +72,11 @@ export const TransactionsScreen = ({ navigation }: Props) => {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  useEffect(() => {
-    loadTransactions();
-  }, [selectedType]);
+  useFocusEffect(
+    useCallback(() => {
+      loadTransactions();
+    }, [selectedType])
+  );
 
   const loadTransactions = async () => {
     try {

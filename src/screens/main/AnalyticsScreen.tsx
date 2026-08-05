@@ -28,38 +28,23 @@ export const AnalyticsScreen = () => {
   const [selectedTimeframe, setSelectedTimeframe] = useState<'week' | 'month' | 'year'>('month');
   const [animatedValue] = useState(new Animated.Value(0));
 
-  // Refresh analytics when screen comes into focus
+  // Refresh analytics when screen comes into focus or timeframe changes
   useFocusEffect(
     useCallback(() => {
-      // Only show loading if we don't have cached data
-      if (!comparison) {
-        setLoading(true);
-      }
       loadAnalytics();
-    }, [selectedTimeframe, comparison])
+      
+      // Animation on first load
+      Animated.timing(animatedValue, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }).start();
+    }, [selectedTimeframe])
   );
-
-  useEffect(() => {
-    setLoading(true);
-    loadAnalytics();
-    // Animation
-    Animated.timing(animatedValue, {
-      toValue: 1,
-      duration: 800,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  useEffect(() => {
-    loadAnalytics();
-  }, [selectedTimeframe]);
 
   const loadAnalytics = async () => {
     try {
-      // Don't show loading if we already have cached data
-      if (!comparison) {
-        setLoading(true);
-      }
+      setLoading(true);
       setError(null);
       const [comparisonData, categoriesData] = await Promise.all([
         analyticsService.getMonthlyComparison(),

@@ -72,28 +72,16 @@ export const TransactionsScreen = ({ navigation }: Props) => {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Refresh transactions when screen comes into focus
+  // Refresh transactions when screen comes into focus or type changes
   useFocusEffect(
     useCallback(() => {
-      // Only show loading if we don't have cached data
-      if (transactions.length === 0) {
-        setLoading(true);
-      }
       loadTransactions();
-    }, [selectedType, transactions.length])
+    }, [selectedType])
   );
-
-  useEffect(() => {
-    setLoading(true);
-    loadTransactions();
-  }, [selectedType]);
 
   const loadTransactions = async () => {
     try {
-      // Don't show loading if we already have cached data
-      if (transactions.length === 0) {
-        setLoading(true);
-      }
+      setLoading(true);
       setError(null);
       
       const params = selectedType !== 'all' ? { type: selectedType } : undefined;

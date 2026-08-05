@@ -95,27 +95,13 @@ export const DashboardScreen = ({ navigation }: Props) => {
   // Refresh dashboard when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      // Only show loading if we don't have cached data
-      if (!dashboardData) {
-        setLoading(true);
-      } else {
-        setIsRefreshing(true);
-      }
       loadDashboardData();
-    }, [dashboardData])
+    }, [])
   );
-
-  useEffect(() => {
-    setLoading(true);
-    loadDashboardData();
-  }, []);
 
   const loadDashboardData = async () => {
     try {
-      // Don't set loading if we already have data (silent refresh)
-      if (!dashboardData) {
-        setLoading(true);
-      }
+      setLoading(true);
       setError(null);
 
       const transactionsResponse = await transactionService.getTransactions({ limit: 1000 });
