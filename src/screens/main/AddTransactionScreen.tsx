@@ -9,12 +9,14 @@ import {
   TextInput,
   Animated,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors, spacing, typography, borderRadius, shadows } from '../../theme';
 import { Input, LoadingButton, FilterChip, LoadingOverlay } from '../../components';
 import { transactionService } from '../../services';
@@ -86,6 +88,10 @@ export const AddTransactionScreen = ({ navigation, route }: Props) => {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(
     existingTransaction?.paymentMethod || ''
   );
+  const [selectedDate, setSelectedDate] = useState(
+    existingTransaction?.date ? new Date(existingTransaction.date) : new Date()
+  );
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [animatedValue] = useState(new Animated.Value(0));
   const [saving, setSaving] = useState(false);
 
@@ -125,7 +131,7 @@ export const AddTransactionScreen = ({ navigation, route }: Props) => {
       category: category?.name || selectedCategory,
       amount: parseFloat(data.amount),
       description: data.description,
-      date: new Date().toISOString(),
+      date: selectedDate.toISOString(),
       emoji: category?.icon || '📦',
       paymentMethod: selectedPaymentMethod || undefined,
       notes: data.notes || undefined,
@@ -321,6 +327,54 @@ export const AddTransactionScreen = ({ navigation, route }: Props) => {
               ))}
             </View>
           </ScrollView>
+        </View>
+
+        {/* Date Selection */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            <Ionicons name="calendar-outline" size={18} color={colors.accent} />
+            {' '}Transaction Date
+          </Text>
+          <TouchableOpacity
+            style={styles.datePickerButton}
+            onPress={() => setShowDatePicker(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.datePickerContent}>
+              <Ionicons name="calendar" size={24} color={colors.accent} />
+              <View style={styles.dateTextContainer}>
+                <Text style={styles.dateText}>
+                  {selectedDate.toLocaleDateString('en-US', { 
+                    weekday: 'short',
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric' 
+                  })}
+                </Text>
+                <Text style={styles.dateSubtext}>
+                  {selectedDate.toDateString() === new Date().toDateString() 
+                    ? 'Today' 
+                    : `${Math.floor((new Date().getTime() - selectedDate.getTime()) / (1000 * 60 * 60 * 24))} days ago`}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              maximumDate={new Date()}
+              onChange={(event, date) => {
+                setShowDatePicker(Platform.OS === 'ios');
+                if (date) {
+                  setSelectedDate(date);
+                }
+              }}
+            />
+          )}
         </View>
 
         {/* Payment Method Selection */}
@@ -528,6 +582,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: spacing.xs,
     textAlign: 'center',
+  },
+  
+  // Date Picker Styles
+  datePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: borderRadius.xl,
+    ...shadows.sm,
+  },
+  datePickerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  dateTextContainer: {
+    gap: spacing.xxs,
+  },
+  dateText: {
+    ...typography.titleMedium,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  dateSubtext: {
+    ...typography.caption,
+    color: colors.textSecondary,
   },
   
   // Section Styles

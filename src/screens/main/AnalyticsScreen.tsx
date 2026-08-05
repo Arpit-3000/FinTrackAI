@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, typography, borderRadius, shadows } from '../../theme';
 import { analyticsService } from '../../services';
 import { SkeletonLoader, ErrorView, LoadingOverlay } from '../../components';
@@ -20,14 +21,26 @@ import type { MonthlyComparison, TopCategory } from '../../types';
 const screenWidth = Dimensions.get('window').width;
 
 export const AnalyticsScreen = () => {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Changed to false
   const [error, setError] = useState<string | null>(null);
   const [comparison, setComparison] = useState<MonthlyComparison | null>(null);
   const [topCategories, setTopCategories] = useState<TopCategory[]>([]);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'week' | 'month' | 'year'>('month');
   const [animatedValue] = useState(new Animated.Value(0));
 
+  // Refresh analytics when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      // Only show loading if we don't have cached data
+      if (!comparison) {
+        setLoading(true);
+      }
+      loadAnalytics();
+    }, [selectedTimeframe, comparison])
+  );
+
   useEffect(() => {
+    setLoading(true);
     loadAnalytics();
     // Animation
     Animated.timing(animatedValue, {
@@ -43,7 +56,10 @@ export const AnalyticsScreen = () => {
 
   const loadAnalytics = async () => {
     try {
-      setLoading(true);
+      // Don't show loading if we already have cached data
+      if (!comparison) {
+        setLoading(true);
+      }
       setError(null);
       const [comparisonData, categoriesData] = await Promise.all([
         analyticsService.getMonthlyComparison(),

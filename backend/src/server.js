@@ -19,15 +19,18 @@ connectDB();
 app.use(helmet());
 app.use(mongoSanitize());
 
-// Rate limiting
+// Rate limiting - Disabled for development/testing
+// Uncomment and configure for production if needed
+/*
 const limiter = rateLimit({
   windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: Number(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+  max: Number(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000, // Increased to 1000
   message: 'Too many requests from this IP, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
 });
 app.use('/api', limiter);
+*/
 
 // Body parser
 app.use(express.json({ limit: '10mb' }));

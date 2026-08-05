@@ -1,6 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
   DashboardScreen,
@@ -30,6 +31,8 @@ const TabIcon = ({ focused, color, iconName }: TabIconProps) => (
 );
 
 const TabsNavigator = () => {
+  const insets = useSafeAreaInsets();
+  
   return (
     <Tab.Navigator
       screenOptions={{
@@ -39,8 +42,8 @@ const TabsNavigator = () => {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopWidth: 0,
-          height: Platform.OS === 'ios' ? 88 : 68,
-          paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+          height: (Platform.OS === 'ios' ? 88 : 68) + insets.bottom,
+          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 12),
           paddingTop: 12,
           paddingHorizontal: spacing.sm,
           ...shadows.lg,

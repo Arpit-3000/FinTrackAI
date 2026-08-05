@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, typography, borderRadius, shadows } from '../../theme';
 import { budgetService } from '../../services';
 import { formatCurrency, formatCurrencySimple } from '../../utils';
@@ -14,7 +15,7 @@ type Props = NativeStackScreenProps<MainTabParamList, 'Budget'>;
 
 export const BudgetScreen = ({ navigation }: Props) => {
   const [budgetData, setBudgetData] = useState<BudgetSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Changed to false
   const [error, setError] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -60,13 +61,28 @@ export const BudgetScreen = ({ navigation }: Props) => {
 
   const [period, setPeriod] = useState<'monthly'>('monthly');
 
+  // Refresh budget when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      // Only show loading if we don't have cached data
+      if (!budgetData) {
+        setLoading(true);
+      }
+      loadBudgetData();
+    }, [budgetData])
+  );
+
   useEffect(() => {
+    setLoading(true);
     loadBudgetData();
   }, []);
 
   const loadBudgetData = async () => {
     try {
-      setLoading(true);
+      // Don't show loading if we already have cached data
+      if (!budgetData) {
+        setLoading(true);
+      }
       setError(null);
       const data = await budgetService.getBudgetSummary();
       setBudgetData(data);

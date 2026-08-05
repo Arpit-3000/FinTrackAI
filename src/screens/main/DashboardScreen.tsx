@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import Svg, { Path, Circle, Line, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import { SkeletonLoader, ErrorView, LoadingOverlay } from '../../components';
@@ -87,16 +88,34 @@ const getCategoryColor = (category: string): string => {
 export const DashboardScreen = ({ navigation }: Props) => {
   const { user } = useAuthStore();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Changed to false - only show on first load
   const [error, setError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Refresh dashboard when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      // Only show loading if we don't have cached data
+      if (!dashboardData) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+      loadDashboardData();
+    }, [dashboardData])
+  );
 
   useEffect(() => {
+    setLoading(true);
     loadDashboardData();
   }, []);
 
   const loadDashboardData = async () => {
     try {
-      setLoading(true);
+      // Don't set loading if we already have data (silent refresh)
+      if (!dashboardData) {
+        setLoading(true);
+      }
       setError(null);
 
       const transactionsResponse = await transactionService.getTransactions({ limit: 1000 });
@@ -202,6 +221,7 @@ export const DashboardScreen = ({ navigation }: Props) => {
       setError(err.message || 'Failed to load dashboard');
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -261,8 +281,11 @@ export const DashboardScreen = ({ navigation }: Props) => {
 
   // Find min and max for chart scaling
   const amounts = dashboardData.weeklyData.map((d) => d.amount);
-  const maxAmount = Math.max(...amounts);
+  const maxAmount = Math.max(...amounts, 1); // Minimum 1 to avoid division by zero
   const minAmount = Math.min(...amounts);
+
+  // Validate that we have valid chart data
+  const hasValidData = amounts.some(a => a > 0);
 
   return (
     <View style={styles.container}>
@@ -390,25 +413,51 @@ export const DashboardScreen = ({ navigation }: Props) => {
                     const padding = 20;
                     const pointSpacing = chartWidth / (dashboardData.weeklyData.length + 1);
 
-                    // Calculate points
+                    // Calculate points with validation
                     const points = dashboardData.weeklyData.map((item, index) => {
                       const x = padding + pointSpacing * (index + 0.5);
-                      const y = chartHeight - (item.amount / maxAmount) * (chartHeight - 40);
-                      return { x, y, amount: item.amount };
+                      // Ensure we don't get NaN by checking for valid numbers
+                      const amount = isNaN(item.amount) || !isFinite(item.amount) ? 0 : item.amount;
+                      const max = isNaN(maxAmount) || maxAmount === 0 ? 1 : maxAmount;
+                      const y = chartHeight - (amount / max) * (chartHeight - 40);
+                      
+                      // Final validation
+                      const validX = isNaN(x) || !isFinite(x) ? 0 : x;
+                      const validY = isNaN(y) || !isFinite(y) ? chartHeight : y;
+                      
+                      return { 
+                        x: validX, 
+                        y: validY, 
+                        amount: amount 
+                      };
                     });
 
+                    // Validate points before creating path
+                    const allPointsValid = points.every(p => 
+                      isFinite(p.x) && isFinite(p.y) && !isNaN(p.x) && !isNaN(p.y)
+                    );
+
+                    if (!allPointsValid || points.length === 0) {
+                      console.warn('Invalid chart points detected');
+                      return null;
+                    }
+
                     // Create smooth curve using quadratic bezier
-                    let pathData = `M ${points[0].x} ${points[0].y}`;
+                    let pathData = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
                     for (let i = 0; i < points.length - 1; i++) {
                       const current = points[i];
                       const next = points[i + 1];
                       const controlX = (current.x + next.x) / 2;
-                      pathData += ` Q ${controlX} ${current.y}, ${controlX} ${(current.y + next.y) / 2}`;
-                      pathData += ` Q ${controlX} ${next.y}, ${next.x} ${next.y}`;
+                      const midY = (current.y + next.y) / 2;
+                      
+                      if (isFinite(controlX) && isFinite(midY)) {
+                        pathData += ` Q ${controlX.toFixed(2)} ${current.y.toFixed(2)}, ${controlX.toFixed(2)} ${midY.toFixed(2)}`;
+                        pathData += ` Q ${controlX.toFixed(2)} ${next.y.toFixed(2)}, ${next.x.toFixed(2)} ${next.y.toFixed(2)}`;
+                      }
                     }
 
                     // Fill path
-                    const fillPath = pathData + ` L ${points[points.length - 1].x} ${chartHeight} L ${points[0].x} ${chartHeight} Z`;
+                    const fillPath = pathData + ` L ${points[points.length - 1].x.toFixed(2)} ${chartHeight} L ${points[0].x.toFixed(2)} ${chartHeight} Z`;
 
                     return (
                       <>

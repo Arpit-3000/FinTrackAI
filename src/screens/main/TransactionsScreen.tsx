@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Modal, ScrollView } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import { SearchBar, FilterChip, SkeletonLoader, ErrorView, LoadingOverlay } from '../../components';
 import { transactionService } from '../../services';
@@ -64,20 +65,35 @@ const getCategoryColor = (category: string): string => {
 
 export const TransactionsScreen = ({ navigation }: Props) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Changed to false
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<'all' | 'income' | 'expense'>('all');
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
+  // Refresh transactions when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      // Only show loading if we don't have cached data
+      if (transactions.length === 0) {
+        setLoading(true);
+      }
+      loadTransactions();
+    }, [selectedType, transactions.length])
+  );
+
   useEffect(() => {
+    setLoading(true);
     loadTransactions();
   }, [selectedType]);
 
   const loadTransactions = async () => {
     try {
-      setLoading(true);
+      // Don't show loading if we already have cached data
+      if (transactions.length === 0) {
+        setLoading(true);
+      }
       setError(null);
       
       const params = selectedType !== 'all' ? { type: selectedType } : undefined;
