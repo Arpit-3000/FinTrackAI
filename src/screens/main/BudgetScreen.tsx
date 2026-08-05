@@ -162,8 +162,51 @@ export const BudgetScreen = ({ navigation }: Props) => {
     }
   };
 
-  const handleEditBudget = (categoryId: string) => {
-    Alert.alert('Edit Budget', `Edit budget for category ${categoryId} - Coming soon!`);
+  const handleEditBudget = (categoryId: string, categoryName: string) => {
+    Alert.alert(
+      'Budget Actions',
+      `What would you like to do with "${categoryName}" budget?`,
+      [
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => handleDeleteBudget(categoryId, categoryName),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
+  const handleDeleteBudget = async (categoryId: string, categoryName: string) => {
+    Alert.alert(
+      'Delete Budget',
+      `Are you sure you want to delete "${categoryName}" budget? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await budgetService.deleteBudget(categoryId);
+              Alert.alert('Success', 'Budget deleted successfully!');
+              loadBudgetData(); // Reload data
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Failed to delete budget');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Don't show error during initial load
@@ -275,7 +318,7 @@ export const BudgetScreen = ({ navigation }: Props) => {
               <TouchableOpacity
                 key={category.id}
                 style={styles.categoryCard}
-                onPress={() => handleEditBudget(category.id)}
+                onPress={() => handleEditBudget(category.id, category.name)}
                 activeOpacity={0.7}
               >
                 <View style={styles.categoryHeader}>

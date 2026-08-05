@@ -178,6 +178,29 @@ exports.getBudgetSummary = async (req, res, next) => {
       isActive: true,
     });
 
+    // Calculate real-time spent for each budget from transactions
+    for (const budget of budgets) {
+      const spent = await Transaction.aggregate([
+        {
+          $match: {
+            user: req.user.id,
+            category: budget.category,
+            type: 'expense',
+            date: { $gte: budget.startDate, $lte: budget.endDate },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: { $abs: '$amount' } },
+          },
+        },
+      ]);
+
+      budget.spent = spent[0]?.total || 0;
+      await budget.save();
+    }
+
     const totalBudget = budgets.reduce((sum, b) => sum + b.amount, 0);
     const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0);
     const totalRemaining = totalBudget - totalSpent;

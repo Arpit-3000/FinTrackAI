@@ -482,6 +482,9 @@ export const AddTransactionScreen = ({ navigation, route }: Props) => {
             loading={saving}
           />
         </View>
+        
+        {/* Extra padding for tab bar */}
+        <View style={{ height: 100 }} />
       </Animated.ScrollView>
     </View>
   );
@@ -497,12 +500,14 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.base,
+    zIndex: 10,
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginHorizontal: -spacing.xs,
+    zIndex: 10,
   },
   headerTitleContainer: {
     flex: 1,
@@ -518,10 +523,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 22,
     ...shadows.sm,
+    zIndex: 10,
   },
   addButton: {
     borderRadius: borderRadius.round,
     ...shadows.md,
+    zIndex: 10,
   },
   addButtonGradient: {
     width: 44,
