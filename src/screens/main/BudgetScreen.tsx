@@ -13,6 +13,77 @@ import type { MainTabParamList } from '../../types/navigation';
 
 type Props = NativeStackScreenProps<MainTabParamList, 'Budget'>;
 
+// Category icons mapping (matching Dashboard/Transaction pages)
+const getCategoryIcon = (category: string): string => {
+  const categoryMap: Record<string, string> = {
+    'food': 'fast-food',
+    'dining': 'fast-food',
+    'groceries': 'cart',
+    'shopping': 'bag-handle',
+    'transport': 'car',
+    'entertainment': 'film',
+    'bills': 'receipt',
+    'utilities': 'flash',
+    'healthcare': 'medical',
+    'health': 'medical',
+    'education': 'school',
+    'salary': 'cash',
+    'investment': 'trending-up',
+    'rent': 'home',
+    'travel': 'airplane',
+    'gym': 'fitness',
+    'clothing': 'shirt',
+    'electronics': 'phone-portrait',
+    'insurance': 'shield-checkmark',
+    'subscription': 'repeat',
+    'gift': 'gift',
+    'default': 'wallet',
+  };
+  
+  const normalizedCategory = category.toLowerCase().replace(/[^a-z]/g, '');
+  for (const [key, icon] of Object.entries(categoryMap)) {
+    if (normalizedCategory.includes(key)) {
+      return icon;
+    }
+  }
+  return categoryMap['default'];
+};
+
+// Category colors mapping
+const getCategoryColor = (category: string): string => {
+  const colorMap: Record<string, string> = {
+    food: colors.chartGold,
+    dining: colors.chartGold,
+    groceries: colors.success,
+    shopping: colors.chartPurple,
+    transport: colors.info,
+    entertainment: colors.chartOrange,
+    bills: colors.warning,
+    utilities: colors.info,
+    healthcare: colors.error,
+    health: colors.error,
+    education: colors.chartPurple,
+    salary: colors.success,
+    investment: colors.chartBlue,
+    rent: colors.warning,
+    travel: colors.chartBlue,
+    gym: colors.chartOrange,
+    clothing: colors.chartPurple,
+    electronics: colors.info,
+    insurance: colors.chartBlue,
+    subscription: colors.warning,
+    gift: colors.chartGold,
+  };
+
+  const normalizedCategory = category.toLowerCase().replace(/[^a-z]/g, '');
+  for (const [key, color] of Object.entries(colorMap)) {
+    if (normalizedCategory.includes(key)) {
+      return color;
+    }
+  }
+  return colors.primary;
+};
+
 export const BudgetScreen = ({ navigation }: Props) => {
   const [budgetData, setBudgetData] = useState<BudgetSummary | null>(null);
   const [loading, setLoading] = useState(false); // Changed to false
@@ -23,66 +94,18 @@ export const BudgetScreen = ({ navigation }: Props) => {
   // Form state
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
-  // Category icons mapping (matching Dashboard/Transaction pages)
-  const getCategoryIcon = (category: string): string => {
-    const categoryMap: Record<string, string> = {
-      'food': 'fast-food',
-      'dining': 'fast-food',
-      'groceries': 'cart',
-      'shopping': 'bag-handle',
-      'transport': 'car',
-      'entertainment': 'film',
-      'bills': 'receipt',
-      'utilities': 'flash',
-      'healthcare': 'medical',
-      'health': 'medical',
-      'education': 'school',
-      'salary': 'cash',
-      'investment': 'trending-up',
-      'rent': 'home',
-      'travel': 'airplane',
-      'gym': 'fitness',
-      'clothing': 'shirt',
-      'electronics': 'phone-portrait',
-      'insurance': 'shield-checkmark',
-      'subscription': 'repeat',
-      'gift': 'gift',
-      'default': 'wallet',
-    };
-    
-    const normalizedCategory = category.toLowerCase().replace(/[^a-z]/g, '');
-    for (const [key, icon] of Object.entries(categoryMap)) {
-      if (normalizedCategory.includes(key)) {
-        return icon;
-      }
-    }
-    return categoryMap['default'];
-  };
-
   const [period, setPeriod] = useState<'monthly'>('monthly');
 
   // Refresh budget when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      // Only show loading if we don't have cached data
-      if (!budgetData) {
-        setLoading(true);
-      }
       loadBudgetData();
-    }, [budgetData])
+    }, [])
   );
-
-  useEffect(() => {
-    setLoading(true);
-    loadBudgetData();
-  }, []);
 
   const loadBudgetData = async () => {
     try {
-      // Don't show loading if we already have cached data
-      if (!budgetData) {
-        setLoading(true);
-      }
+      setLoading(true);
       setError(null);
       const data = await budgetService.getBudgetSummary();
       setBudgetData(data);
