@@ -1,12 +1,14 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Modal, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import Svg, { Circle, G, Text as SvgText } from 'react-native-svg';
 import { colors, spacing, typography, borderRadius, shadows } from '../../theme';
 import { budgetService } from '../../services';
 import { formatCurrency, formatCurrencySimple } from '../../utils';
 import { SkeletonLoader, ErrorView, LoadingButton, LoadingOverlay } from '../../components';
+import { useDataStore } from '../../store';
 import type { BudgetSummary, CreateBudgetData } from '../../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { MainTabParamList } from '../../types/navigation';
@@ -57,7 +59,7 @@ const getCategoryColor = (category: string): string => {
     groceries: colors.success,
     shopping: colors.chartPurple,
     transport: colors.info,
-    entertainment: colors.chartOrange,
+    entertainment: colors.chartBronze,
     bills: colors.warning,
     utilities: colors.info,
     healthcare: colors.error,
@@ -67,7 +69,7 @@ const getCategoryColor = (category: string): string => {
     investment: colors.chartBlue,
     rent: colors.warning,
     travel: colors.chartBlue,
-    gym: colors.chartOrange,
+    gym: colors.chartBronze,
     clothing: colors.chartPurple,
     electronics: colors.info,
     insurance: colors.chartBlue,
@@ -84,24 +86,40 @@ const getCategoryColor = (category: string): string => {
   return colors.primary;
 };
 
+const PREDEFINED_CATEGORIES = [
+  'Food', 'Groceries', 'Shopping', 'Transport', 'Entertainment', 'Bills',
+  'Utilities', 'Healthcare', 'Education', 'Investment', 'Rent',
+  'Travel', 'Gym', 'Clothing', 'Electronics', 'Insurance', 'Subscription', 'Gift', 'Other'
+];
+
 export const BudgetScreen = ({ navigation }: Props) => {
   const [budgetData, setBudgetData] = useState<BudgetSummary | null>(null);
   const [loading, setLoading] = useState(false); // Changed to false
   const [error, setError] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
   
   // Form state
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
   const [period, setPeriod] = useState<'monthly'>('monthly');
+  const [alertThreshold, setAlertThreshold] = useState<number>(80);
 
-  // Refresh budget when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      loadBudgetData();
-    }, [])
-  );
+  const { refreshTrigger, triggerRefresh } = useDataStore();
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Refresh budget on mount or trigger
+  useEffect(() => {
+    loadBudgetData();
+  }, [refreshTrigger]);
+
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await loadBudgetData();
+    setIsRefreshing(false);
+  }, []);
 
   const loadBudgetData = async () => {
     try {
@@ -117,10 +135,14 @@ export const BudgetScreen = ({ navigation }: Props) => {
   };
 
   const handleAddBudget = () => {
+    setEditingBudgetId(null);
+    setCategory('');
+    setAmount('');
+    setAlertThreshold(80);
     setModalVisible(true);
   };
 
-  const handleCreateBudget = async () => {
+  const handleSaveBudget = async () => {
     if (!category.trim()) {
       Alert.alert('Error', 'Please enter a category name');
       return;
@@ -144,33 +166,51 @@ export const BudgetScreen = ({ navigation }: Props) => {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         emoji: '💰',
-        color: '#007AFF',
-        alertThreshold: 80,
+        color: getCategoryColor(category),
+        alertThreshold: alertThreshold,
       };
 
-      await budgetService.createBudget(budgetData);
+      if (editingBudgetId) {
+        await budgetService.updateBudget(editingBudgetId, budgetData);
+        Alert.alert('Success', 'Budget updated successfully!');
+      } else {
+        await budgetService.createBudget(budgetData);
+        Alert.alert('Success', 'Budget created successfully!');
+      }
       
-      Alert.alert('Success', 'Budget created successfully!');
+      triggerRefresh();
+      
       setModalVisible(false);
+      setEditingBudgetId(null);
       setCategory('');
       setAmount('');
       loadBudgetData(); // Reload data
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to create budget');
+      Alert.alert('Error', err.message || (editingBudgetId ? 'Failed to update budget' : 'Failed to create budget'));
     } finally {
       setCreating(false);
     }
   };
 
-  const handleEditBudget = (categoryId: string, categoryName: string) => {
+  const handleEditBudget = (budget: any) => {
     Alert.alert(
       'Budget Actions',
-      `What would you like to do with "${categoryName}" budget?`,
+      `What would you like to do with "${budget.name}" budget?`,
       [
+        {
+          text: 'Edit',
+          onPress: () => {
+            setEditingBudgetId(budget.id);
+            setCategory(budget.name);
+            setAmount(budget.budget.toString());
+            setAlertThreshold(budget.alertThreshold || 80);
+            setModalVisible(true);
+          },
+        },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => handleDeleteBudget(categoryId, categoryName),
+          onPress: () => handleDeleteBudget(budget.id, budget.name),
         },
         {
           text: 'Cancel',
@@ -196,6 +236,7 @@ export const BudgetScreen = ({ navigation }: Props) => {
             try {
               setLoading(true);
               await budgetService.deleteBudget(categoryId);
+              triggerRefresh();
               Alert.alert('Success', 'Budget deleted successfully!');
               loadBudgetData(); // Reload data
             } catch (err: any) {
@@ -222,7 +263,18 @@ export const BudgetScreen = ({ navigation }: Props) => {
   return (
     <View style={{ flex: 1 }}>
       <LoadingOverlay visible={loading} message="Loading Budget..." />
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+      >
       {/* Header - matching Transaction page style */}
       <LinearGradient
         colors={[colors.background, colors.backgroundSecondary]}
@@ -244,6 +296,55 @@ export const BudgetScreen = ({ navigation }: Props) => {
               <Ionicons name="add" size={24} color={colors.white} />
             </LinearGradient>
           </TouchableOpacity>
+        </View>
+
+        {/* Circular Progress Chart */}
+        <View style={styles.chartContainer}>
+          {(() => {
+            const radius = 70;
+            const strokeWidth = 14;
+            const center = radius + strokeWidth;
+            const size = center * 2;
+            const circumference = 2 * Math.PI * radius;
+            const percentage = budgetData.monthly.total > 0 
+              ? Math.min((budgetData.monthly.spent / budgetData.monthly.total) * 100, 100)
+              : 0;
+            const strokeDashoffset = circumference - (percentage / 100) * circumference;
+            const isOverBudget = budgetData.monthly.spent > budgetData.monthly.total;
+            const chartColor = isOverBudget ? colors.error : (percentage > 80 ? colors.warning : colors.success);
+
+            return (
+              <View style={styles.chartWrapper}>
+                <Svg width={size} height={size}>
+                  <G rotation="-90" origin={`${center}, ${center}`}>
+                    <Circle
+                      cx={center}
+                      cy={center}
+                      r={radius}
+                      stroke={colors.border}
+                      strokeWidth={strokeWidth}
+                      fill="transparent"
+                    />
+                    <Circle
+                      cx={center}
+                      cy={center}
+                      r={radius}
+                      stroke={chartColor}
+                      strokeWidth={strokeWidth}
+                      fill="transparent"
+                      strokeDasharray={circumference}
+                      strokeDashoffset={strokeDashoffset}
+                      strokeLinecap="round"
+                    />
+                  </G>
+                </Svg>
+                <View style={styles.chartCenterContent}>
+                  <Text style={styles.chartCenterPercentage}>{percentage.toFixed(0)}%</Text>
+                  <Text style={styles.chartCenterLabel}>{isOverBudget ? 'Over Budget' : 'Spent'}</Text>
+                </View>
+              </View>
+            );
+          })()}
         </View>
 
         {/* Monthly Budget Overview - matching Transaction summary cards */}
@@ -318,7 +419,7 @@ export const BudgetScreen = ({ navigation }: Props) => {
               <TouchableOpacity
                 key={category.id}
                 style={styles.categoryCard}
-                onPress={() => handleEditBudget(category.id, category.name)}
+                onPress={() => handleEditBudget(category)}
                 activeOpacity={0.7}
               >
                 <View style={styles.categoryHeader}>
@@ -404,17 +505,39 @@ export const BudgetScreen = ({ navigation }: Props) => {
             <ScrollView style={styles.modalScroll}>
               <View style={styles.sheetHandle} />
               
-              <Text style={styles.modalTitle}>Create Budget</Text>
+              <Text style={styles.modalTitle}>{editingBudgetId ? 'Edit Budget' : 'Create Budget'}</Text>
               
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Category Name</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="e.g., Food & Dining"
-                  placeholderTextColor={colors.textSecondary}
-                  value={category}
-                  onChangeText={setCategory}
-                />
+                <Text style={styles.formLabel}>Select Category</Text>
+                <View style={styles.categoryGrid}>
+                  {PREDEFINED_CATEGORIES.map((cat) => {
+                    const isSelected = category.toLowerCase() === cat.toLowerCase();
+                    const iconName = getCategoryIcon(cat);
+                    const iconColor = getCategoryColor(cat);
+                    
+                    return (
+                      <TouchableOpacity
+                        key={cat}
+                        style={[
+                          styles.categoryGridItem,
+                          isSelected && styles.categoryGridItemSelected,
+                          isSelected && { borderColor: iconColor }
+                        ]}
+                        onPress={() => setCategory(cat)}
+                      >
+                        <View style={[styles.categoryGridIcon, { backgroundColor: iconColor + '20' }]}>
+                          <Ionicons name={iconName as any} size={20} color={iconColor} />
+                        </View>
+                        <Text style={[
+                          styles.categoryGridText,
+                          isSelected && { color: iconColor, fontWeight: '600' }
+                        ]} numberOfLines={1}>
+                          {cat}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
 
               <View style={styles.formGroup}>
@@ -428,6 +551,28 @@ export const BudgetScreen = ({ navigation }: Props) => {
                   onChangeText={setAmount}
                 />
               </View>
+              
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Alert Threshold</Text>
+                <Text style={styles.formSubLabel}>Get notified when you spend this much of your budget</Text>
+                <View style={styles.thresholdGrid}>
+                  {[50, 75, 80, 90, 100].map((val) => (
+                    <TouchableOpacity
+                      key={val}
+                      style={[
+                        styles.thresholdChip,
+                        alertThreshold === val && styles.thresholdChipSelected
+                      ]}
+                      onPress={() => setAlertThreshold(val)}
+                    >
+                      <Text style={[
+                        styles.thresholdText,
+                        alertThreshold === val && styles.thresholdTextSelected
+                      ]}>{val}%</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
 
               <View style={styles.modalButtons}>
                 <TouchableOpacity 
@@ -439,11 +584,11 @@ export const BudgetScreen = ({ navigation }: Props) => {
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={[styles.createButton, creating && styles.createButtonDisabled]} 
-                  onPress={handleCreateBudget}
+                  onPress={handleSaveBudget}
                   disabled={creating}
                 >
                   <Text style={styles.createButtonText}>
-                    {creating ? 'Creating...' : 'Create Budget'}
+                    {creating ? 'Saving...' : (editingBudgetId ? 'Update Budget' : 'Create Budget')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -488,6 +633,33 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  
+  // Chart Styles
+  chartContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xl,
+  },
+  chartWrapper: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chartCenterContent: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chartCenterPercentage: {
+    ...typography.h2,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  chartCenterLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xxs,
   },
   
   // Summary Cards - matching Transaction page
@@ -748,6 +920,68 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     ...shadows.sm,
+  },
+  formSubLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+    marginTop: -spacing.xs,
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  categoryGridItem: {
+    width: '31%',
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  categoryGridItemSelected: {
+    backgroundColor: colors.surface,
+  },
+  categoryGridIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  categoryGridText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    fontSize: 11,
+  },
+  thresholdGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  thresholdChip: {
+    backgroundColor: colors.backgroundSecondary,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  thresholdChipSelected: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  thresholdText: {
+    ...typography.button,
+    color: colors.text,
+  },
+  thresholdTextSelected: {
+    color: colors.white,
   },
   modalButtons: {
     flexDirection: 'row',

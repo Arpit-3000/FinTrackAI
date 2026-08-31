@@ -7,51 +7,84 @@ import {
   Dimensions,
   TouchableOpacity,
   Animated,
+  RefreshControl,
 } from 'react-native';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { colors, spacing, typography, borderRadius, shadows } from '../../theme';
 import { analyticsService } from '../../services';
-import { SkeletonLoader, ErrorView, LoadingOverlay } from '../../components';
+import { SkeletonLoader, ErrorView, LoadingOverlay, EmptyState } from '../../components';
+import { useDataStore } from '../../store';
 import { formatCurrency, formatCurrencySimple } from '../../utils';
 import type { MonthlyComparison, TopCategory } from '../../types';
 
 const screenWidth = Dimensions.get('window').width;
 
 export const AnalyticsScreen = () => {
-  const [loading, setLoading] = useState(false); // Changed to false
+  const navigation = useNavigation<any>();
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [comparison, setComparison] = useState<MonthlyComparison | null>(null);
   const [topCategories, setTopCategories] = useState<TopCategory[]>([]);
+  const [trends, setTrends] = useState<any[]>([]);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'week' | 'month' | 'year'>('month');
   const [animatedValue] = useState(new Animated.Value(0));
+  const [refreshing, setRefreshing] = useState(false);
+  const { refreshTrigger } = useDataStore();
 
-  // Refresh analytics when screen comes into focus or timeframe changes
-  useFocusEffect(
-    useCallback(() => {
-      loadAnalytics();
-      
-      // Animation on first load
-      Animated.timing(animatedValue, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }).start();
-    }, [selectedTimeframe])
-  );
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadAnalytics();
+    setRefreshing(false);
+  }, [selectedTimeframe]);
+
+  // Refresh analytics on mount or timeframe changes
+  useEffect(() => {
+    loadAnalytics();
+    
+    // Animation on first load
+    Animated.timing(animatedValue, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    }).start();
+  }, [selectedTimeframe, refreshTrigger]);
 
   const loadAnalytics = async () => {
     try {
       setLoading(true);
       setError(null);
-      const [comparisonData, categoriesData] = await Promise.all([
-        analyticsService.getMonthlyComparison(),
-        analyticsService.getTopCategories('expense', 5)
+
+      const now = new Date();
+      let startDate = '';
+      const endDate = now.toISOString();
+
+      if (selectedTimeframe === 'week') {
+        const d = new Date(now);
+        d.setDate(now.getDate() - 7);
+        startDate = d.toISOString();
+      } else if (selectedTimeframe === 'year') {
+        const d = new Date(now);
+        d.setDate(now.getDate() - 365);
+        startDate = d.toISOString();
+      } else {
+        // month
+        const d = new Date(now);
+        d.setDate(now.getDate() - 30);
+        startDate = d.toISOString();
+      }
+
+      const [comparisonData, categoriesData, detailedData] = await Promise.all([
+        analyticsService.getMonthlyComparison(selectedTimeframe),
+        analyticsService.getTopCategories('expense', 5, startDate, endDate),
+        analyticsService.getDetailedAnalytics(startDate, endDate)
       ]);
+
       setComparison(comparisonData);
       setTopCategories(categoriesData);
+      setTrends(detailedData.trends || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load analytics');
     } finally {
@@ -60,18 +93,18 @@ export const AnalyticsScreen = () => {
   };
 
   const chartConfig = {
-    backgroundColor: 'transparent',
-    backgroundGradientFrom: 'transparent',
-    backgroundGradientTo: 'transparent',
+    backgroundColor: colors.surface,
+    backgroundGradientFrom: colors.surface,
+    backgroundGradientTo: colors.surface,
     decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+    color: (opacity = 1) => `rgba(198, 122, 77, ${opacity})`, // colors.primary
+    labelColor: (opacity = 1) => `rgba(122, 114, 107, ${opacity})`, // colors.textSecondary
     style: {
       borderRadius: 16,
     },
     propsForDots: {
-      r: '8',
-      strokeWidth: '3',
+      r: '5',
+      strokeWidth: '2',
       stroke: colors.primary,
       fill: colors.white,
     },
@@ -79,8 +112,7 @@ export const AnalyticsScreen = () => {
 
   const premiumChartConfig = {
     ...chartConfig,
-    fillShadowGradient: colors.primary,
-    fillShadowGradientOpacity: 0.3,
+    fillShadowGradientOpacity: 0.05,
   };
 
   // Enhanced category data with premium icons (matching Dashboard/Transaction pages)
@@ -119,14 +151,136 @@ export const AnalyticsScreen = () => {
     }
   };
 
+  const getChartData = () => {
+    const dates: string[] = [];
+    const labels: string[] = [];
+    const incomeData: number[] = [];
+    const expenseData: number[] = [];
+
+    const now = new Date();
+
+    if (selectedTimeframe === 'week') {
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(now.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        dates.push(dateStr);
+        labels.push(d.toLocaleDateString('en-IN', { weekday: 'short' }));
+      }
+    } else if (selectedTimeframe === 'year') {
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const yearMonthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        dates.push(yearMonthStr);
+        labels.push(d.toLocaleDateString('en-IN', { month: 'short' }));
+      }
+    } else {
+      // Month
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(now.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        dates.push(dateStr);
+        if (i % 6 === 0) {
+          labels.push(d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }));
+        } else {
+          labels.push('');
+        }
+      }
+    }
+
+    const incomeMap: Record<string, number> = {};
+    const expenseMap: Record<string, number> = {};
+
+    trends.forEach((item) => {
+      if (item._id && item._id.date) {
+        const type = item._id.type;
+        const date = item._id.date;
+        const amount = item.total || 0;
+
+        if (type === 'income') {
+          incomeMap[date] = (incomeMap[date] || 0) + amount;
+        } else {
+          expenseMap[date] = (expenseMap[date] || 0) + amount;
+        }
+      }
+    });
+
+    if (selectedTimeframe === 'year') {
+      dates.forEach((yearMonth) => {
+        let monthIncome = 0;
+        let monthExpense = 0;
+
+        trends.forEach((item) => {
+          if (item._id && item._id.date && item._id.date.startsWith(yearMonth)) {
+            if (item._id.type === 'income') {
+              monthIncome += item.total || 0;
+            } else {
+              monthExpense += item.total || 0;
+            }
+          }
+        });
+
+        incomeData.push(monthIncome);
+        expenseData.push(monthExpense);
+      });
+    } else {
+      dates.forEach((dateStr) => {
+        incomeData.push(incomeMap[dateStr] || 0);
+        expenseData.push(expenseMap[dateStr] || 0);
+      });
+    }
+
+    // Default to at least one zero if no data exists, to prevent line chart errors
+    const finalIncome = incomeData.length > 0 ? incomeData : [0];
+    const finalExpense = expenseData.length > 0 ? expenseData : [0];
+    const finalLabels = labels.length > 0 ? labels : [''];
+
+    return {
+      labels: finalLabels,
+      datasets: [
+        {
+          data: finalIncome,
+          color: (opacity = 1) => `rgba(46, 139, 87, ${opacity})`, // success
+          strokeWidth: 2,
+        },
+        {
+          data: finalExpense,
+          color: (opacity = 1) => `rgba(217, 69, 69, ${opacity})`, // error
+          strokeWidth: 2,
+        },
+      ],
+      legend: ['Income', 'Expense'],
+    };
+  };
+
   // Don't show error during initial load
   if (error && !loading) {
     return <ErrorView message={error} onRetry={loadAnalytics} />;
   }
 
-  // Show nothing if still loading initial data
+  // Show loading spinner if comparison data is not yet resolved
+  if (loading && !comparison) {
+    return (
+      <View style={styles.container}>
+        <LoadingOverlay visible={true} message="Loading Analytics..." />
+      </View>
+    );
+  }
+
+  // Fallback if data loading failed or comparison is null
   if (!comparison) {
-    return null;
+    return (
+      <View style={styles.container}>
+        <EmptyState
+          icon="📊"
+          title="No Financial Data Yet"
+          description="Add income or expense transactions to unlock detailed charts, category breakdowns, and smart insights."
+          actionLabel="Add Transaction"
+          onAction={() => navigation.navigate('AddTransaction')}
+        />
+      </View>
+    );
   }
 
   const incomeChange = comparison.changes.income.amount;
@@ -137,7 +291,7 @@ export const AnalyticsScreen = () => {
     ? ((comparison.currentMonth.savings / comparison.currentMonth.income) * 100) 
     : 0;
 
-  const pieChartData = topCategories.slice(0, 5).map((category, index) => {
+  const pieChartData = topCategories.slice(0, 5).map((category) => {
     const iconData = categoryIcons[category.category] || categoryIcons['Default'];
     return {
       name: category.category,
@@ -147,6 +301,69 @@ export const AnalyticsScreen = () => {
       legendFontSize: 12,
     };
   });
+
+  const hasNoData = 
+    comparison.currentMonth.income === 0 && 
+    comparison.currentMonth.expense === 0 && 
+    comparison.previousMonth.income === 0 && 
+    comparison.previousMonth.expense === 0;
+
+  if (hasNoData) {
+    return (
+      <View style={styles.container}>
+        <LoadingOverlay visible={loading} message="Loading Analytics..." />
+        <LinearGradient
+          colors={[colors.background, colors.backgroundSecondary]}
+          style={styles.header}
+        >
+          <View style={styles.headerTop}>
+            <Text style={styles.title}>Analytics</Text>
+          </View>
+          <View style={styles.timeframeContainer}>
+            {(['week', 'month', 'year'] as const).map((period) => (
+              <TouchableOpacity
+                key={period}
+                style={[
+                  styles.timeframeButton,
+                  selectedTimeframe === period && styles.timeframeButtonActive,
+                ]}
+                onPress={() => setSelectedTimeframe(period)}
+              >
+                <Text
+                  style={[
+                    styles.timeframeText,
+                    selectedTimeframe === period && styles.timeframeTextActive,
+                  ]}
+                >
+                  {period.charAt(0).toUpperCase() + period.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </LinearGradient>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          <EmptyState
+            icon="📊"
+            title="No Financial Data"
+            description="You don't have any transactions recorded for this period. Add income or expense transactions to unlock detailed charts, category breakdowns, and smart insights."
+            actionLabel="Add Transaction"
+            onAction={() => navigation.navigate('AddTransaction')}
+          />
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -198,6 +415,14 @@ export const AnalyticsScreen = () => {
           }]
         }]} 
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
       >
 
         {/* Summary Cards - matching Transaction page style */}
@@ -253,11 +478,13 @@ export const AnalyticsScreen = () => {
           </View>
         </View>
 
-        {/* Enhanced Monthly Comparison Chart */}
+        {/* Enhanced Line Chart for Trends */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View>
-              <Text style={styles.cardTitle}>Monthly Trends</Text>
+              <Text style={styles.cardTitle}>
+                {selectedTimeframe === 'week' ? 'Weekly' : selectedTimeframe === 'year' ? 'Yearly' : 'Monthly'} Trends
+              </Text>
               <Text style={styles.cardSubtitle}>Income vs Expenses</Text>
             </View>
             <TouchableOpacity style={styles.chartTypeButton}>
@@ -265,34 +492,15 @@ export const AnalyticsScreen = () => {
             </TouchableOpacity>
           </View>
           <View style={styles.chartContainer}>
-            <BarChart
-              data={{
-                labels: ['Income', 'Expense', 'Savings'],
-                datasets: [
-                  {
-                    data: [
-                      comparison.currentMonth.income / 1000,
-                      comparison.currentMonth.expense / 1000,
-                      comparison.currentMonth.savings / 1000,
-                    ],
-                    colors: [
-                      () => '#10B981',
-                      () => '#EF4444',
-                      () => colors.primary,
-                    ],
-                  },
-                ],
-              }}
+            <LineChart
+              data={getChartData()}
               width={screenWidth - spacing.lg * 4}
               height={220}
-              yAxisLabel="₹"
-              yAxisSuffix="k"
               chartConfig={premiumChartConfig}
               style={styles.chart}
-              withInnerLines={false}
+              bezier
+              withDots
               fromZero
-              showBarTops={false}
-              withCustomBarColorFromData
             />
           </View>
         </View>
@@ -316,7 +524,7 @@ export const AnalyticsScreen = () => {
               {getInsightIcon(expensePercentage <= 0 ? 'positive' : 'negative')}
               <Text style={styles.insightText}>
                 {expensePercentage <= 0 
-                  ? 'Expenses decreased this month. Keep it up!'
+                  ? 'Expenses decreased this period. Keep it up!'
                   : `Expenses increased by ${Math.abs(expensePercentage).toFixed(1)}%. Consider reviewing your spending.`}
               </Text>
             </View>
@@ -328,7 +536,7 @@ export const AnalyticsScreen = () => {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>Spending Breakdown</Text>
-              <TouchableOpacity style={styles.viewAllButton}>
+              <TouchableOpacity style={styles.viewAllButton} onPress={() => navigation.navigate('Transactions')}>
                 <Text style={styles.viewAllText}>View All</Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.primary} />
               </TouchableOpacity>
@@ -383,7 +591,7 @@ export const AnalyticsScreen = () => {
         {/* Monthly Goals Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>🎯 Monthly Goals</Text>
+            <Text style={styles.cardTitle}>🎯 Period Goals</Text>
             <TouchableOpacity>
               <MaterialIcons name="edit" size={20} color={colors.primary} />
             </TouchableOpacity>
@@ -412,7 +620,7 @@ export const AnalyticsScreen = () => {
 
         {/* Previous Month Comparison */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Previous Month</Text>
+          <Text style={styles.cardTitle}>Previous Period Comparison</Text>
           <View style={styles.comparisonGrid}>
             <View style={styles.comparisonItem}>
               <Ionicons name="trending-up" size={20} color={colors.success} />

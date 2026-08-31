@@ -132,6 +132,7 @@ export interface BudgetSummary {
     remaining: number;
     percentage: string;
     color: string;
+    alertThreshold: number;
   }>;
   warnings: Array<{
     id: string;

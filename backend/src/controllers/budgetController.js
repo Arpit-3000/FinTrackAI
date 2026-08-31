@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Budget = require('../models/Budget');
 const Transaction = require('../models/Transaction');
 
@@ -78,19 +79,23 @@ exports.createBudget = async (req, res, next) => {
     const budget = await Budget.create(req.body);
 
     // Calculate initial spent amount
+    const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
+    const endDate = new Date(budget.endDate);
+    endDate.setHours(23, 59, 59, 999);
+
     const spent = await Transaction.aggregate([
       {
         $match: {
-          user: req.user.id,
-          category: budget.category,
+          user: userId,
+          category: { $regex: new RegExp(`^${budget.category.trim()}$`, 'i') },
           type: 'expense',
-          date: { $gte: budget.startDate, $lte: budget.endDate },
+          date: { $gte: budget.startDate, $lte: endDate },
         },
       },
       {
         $group: {
           _id: null,
-          total: { $sum: '$amount' },
+          total: { $sum: { $abs: '$amount' } },
         },
       },
     ]);
@@ -179,14 +184,18 @@ exports.getBudgetSummary = async (req, res, next) => {
     });
 
     // Calculate real-time spent for each budget from transactions
+    const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
     for (const budget of budgets) {
+      const endDate = new Date(budget.endDate);
+      endDate.setHours(23, 59, 59, 999);
+
       const spent = await Transaction.aggregate([
         {
           $match: {
-            user: req.user.id,
-            category: budget.category,
+            user: userId,
+            category: { $regex: new RegExp(`^${budget.category.trim()}$`, 'i') },
             type: 'expense',
-            date: { $gte: budget.startDate, $lte: budget.endDate },
+            date: { $gte: budget.startDate, $lte: endDate },
           },
         },
         {
@@ -241,6 +250,7 @@ exports.getBudgetSummary = async (req, res, next) => {
           remaining: b.remaining,
           percentage: b.percentage.toFixed(1),
           color: b.color,
+          alertThreshold: b.alertThreshold || 80,
         })),
         warnings: warnings.map((b) => ({
           id: b._id,

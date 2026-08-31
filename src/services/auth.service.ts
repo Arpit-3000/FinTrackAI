@@ -17,7 +17,6 @@ class AuthService {
       name: userData.fullName,
       email: userData.email,
       password: userData.password,
-      phone: userData.phone,
     });
 
     if (response.success && response.data) {

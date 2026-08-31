@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Modal, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import { SearchBar, FilterChip, SkeletonLoader, ErrorView, LoadingOverlay } from '../../components';
+import { useDataStore } from '../../store';
 import { transactionService } from '../../services';
 import { formatCurrency } from '../../utils';
 import { API_BASE_URL } from '../../constants';
@@ -72,12 +73,20 @@ export const TransactionsScreen = ({ navigation }: Props) => {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Refresh transactions when screen comes into focus or type changes
-  useFocusEffect(
-    useCallback(() => {
-      loadTransactions();
-    }, [selectedType])
-  );
+  const { refreshTrigger } = useDataStore();
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Refresh transactions on mount or type changes
+  useEffect(() => {
+    loadTransactions();
+  }, [selectedType, refreshTrigger]);
+
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await loadTransactions();
+    setIsRefreshing(false);
+  }, [selectedType]);
 
   const loadTransactions = async () => {
     try {
@@ -283,6 +292,14 @@ export const TransactionsScreen = ({ navigation }: Props) => {
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIcon}>

@@ -37,15 +37,18 @@ class AnalyticsService {
     throw new Error(response.message || 'Failed to get detailed analytics');
   }
 
-  // Get monthly comparison
-  async getMonthlyComparison(): Promise<MonthlyComparison> {
-    const response = await api.get<MonthlyComparison>(API_ENDPOINTS.ANALYTICS_COMPARISON);
+  // Get comparison
+  async getMonthlyComparison(timeframe?: 'week' | 'month' | 'year'): Promise<MonthlyComparison> {
+    const url = timeframe 
+      ? `${API_ENDPOINTS.ANALYTICS_COMPARISON}?timeframe=${timeframe}`
+      : API_ENDPOINTS.ANALYTICS_COMPARISON;
+    const response = await api.get<MonthlyComparison>(url);
 
     if (response.success && response.data) {
       return response.data;
     }
 
-    throw new Error(response.message || 'Failed to get monthly comparison');
+    throw new Error(response.message || 'Failed to get comparison');
   }
 
   // Get top categories

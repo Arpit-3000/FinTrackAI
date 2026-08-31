@@ -19,6 +19,7 @@ import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors, spacing, typography, borderRadius, shadows } from '../../theme';
 import { Input, LoadingButton, FilterChip, LoadingOverlay } from '../../components';
+import { useDataStore } from '../../store';
 import { transactionService } from '../../services';
 import type { CreateTransactionData, Transaction } from '../../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -95,6 +96,8 @@ export const AddTransactionScreen = ({ navigation, route }: Props) => {
   const [animatedValue] = useState(new Animated.Value(0));
   const [saving, setSaving] = useState(false);
 
+  const { triggerRefresh } = useDataStore();
+
   const {
     control,
     handleSubmit,
@@ -142,11 +145,13 @@ export const AddTransactionScreen = ({ navigation, route }: Props) => {
       
       if (isEditing && existingTransaction) {
         await transactionService.updateTransaction(existingTransaction._id, transactionData);
+        triggerRefresh();
         Alert.alert('Success', 'Transaction updated successfully!', [
           { text: 'OK', onPress: () => navigation.goBack() }
         ]);
       } else {
         await transactionService.createTransaction(transactionData);
+        triggerRefresh();
         Alert.alert('Success', 'Transaction added successfully!', [
           { text: 'OK', onPress: () => navigation.goBack() }
         ]);

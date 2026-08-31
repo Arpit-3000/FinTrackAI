@@ -5,7 +5,7 @@ const Transaction = require('../models/Transaction');
 // @access  Private
 exports.getDashboard = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user._id;
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -110,7 +110,7 @@ exports.getDashboard = async (req, res, next) => {
 // @access  Private
 exports.getDetailedAnalytics = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user._id;
     const { startDate, endDate } = req.query;
 
     const start = startDate ? new Date(startDate) : new Date(new Date().setMonth(new Date().getMonth() - 1));
@@ -221,20 +221,71 @@ exports.getDetailedAnalytics = async (req, res, next) => {
 // @access  Private
 exports.getMonthlyComparison = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user._id;
+    const { timeframe = 'month' } = req.query;
     const now = new Date();
     
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    let currentStart, currentEnd, previousStart, previousEnd;
+    
+    if (timeframe === 'week') {
+      // Last 7 days
+      currentStart = new Date(now);
+      currentStart.setDate(now.getDate() - 7);
+      currentStart.setHours(0, 0, 0, 0);
+      
+      currentEnd = new Date(now);
+      currentEnd.setHours(23, 59, 59, 999);
+      
+      // Previous 7 days (7 to 14 days ago)
+      previousStart = new Date(now);
+      previousStart.setDate(now.getDate() - 14);
+      previousStart.setHours(0, 0, 0, 0);
+      
+      previousEnd = new Date(now);
+      previousEnd.setDate(now.getDate() - 7);
+      previousEnd.setHours(23, 59, 59, 999);
+    } else if (timeframe === 'year') {
+      // Last 365 days
+      currentStart = new Date(now);
+      currentStart.setDate(now.getDate() - 365);
+      currentStart.setHours(0, 0, 0, 0);
+      
+      currentEnd = new Date(now);
+      currentEnd.setHours(23, 59, 59, 999);
+      
+      // Previous 365 days (365 to 730 days ago)
+      previousStart = new Date(now);
+      previousStart.setDate(now.getDate() - 730);
+      previousStart.setHours(0, 0, 0, 0);
+      
+      previousEnd = new Date(now);
+      previousEnd.setDate(now.getDate() - 365);
+      previousEnd.setHours(23, 59, 59, 999);
+    } else {
+      // Default to last 30 days
+      currentStart = new Date(now);
+      currentStart.setDate(now.getDate() - 30);
+      currentStart.setHours(0, 0, 0, 0);
+      
+      currentEnd = new Date(now);
+      currentEnd.setHours(23, 59, 59, 999);
+      
+      // Previous 30 days (30 to 60 days ago)
+      previousStart = new Date(now);
+      previousStart.setDate(now.getDate() - 60);
+      previousStart.setHours(0, 0, 0, 0);
+      
+      previousEnd = new Date(now);
+      previousEnd.setDate(now.getDate() - 30);
+      previousEnd.setHours(23, 59, 59, 999);
+    }
 
-    // Current month stats
-    const currentMonth = await Transaction.aggregate([
+    // Current period stats
+    const currentPeriod = await Transaction.aggregate([
       {
         $match: {
           user: userId,
-          date: { $gte: currentMonthStart, $lte: currentMonthEnd },
+          date: { $gte: currentStart, $lte: currentEnd },
         },
       },
       {
@@ -246,12 +297,12 @@ exports.getMonthlyComparison = async (req, res, next) => {
       },
     ]);
 
-    // Previous month stats
-    const previousMonth = await Transaction.aggregate([
+    // Previous period stats
+    const previousPeriod = await Transaction.aggregate([
       {
         $match: {
           user: userId,
-          date: { $gte: previousMonthStart, $lte: previousMonthEnd },
+          date: { $gte: previousStart, $lte: previousEnd },
         },
       },
       {
@@ -263,10 +314,10 @@ exports.getMonthlyComparison = async (req, res, next) => {
       },
     ]);
 
-    const currentIncome = currentMonth.find((m) => m._id === 'income')?.total || 0;
-    const currentExpense = currentMonth.find((m) => m._id === 'expense')?.total || 0;
-    const previousIncome = previousMonth.find((m) => m._id === 'income')?.total || 0;
-    const previousExpense = previousMonth.find((m) => m._id === 'expense')?.total || 0;
+    const currentIncome = currentPeriod.find((m) => m._id === 'income')?.total || 0;
+    const currentExpense = currentPeriod.find((m) => m._id === 'expense')?.total || 0;
+    const previousIncome = previousPeriod.find((m) => m._id === 'income')?.total || 0;
+    const previousExpense = previousPeriod.find((m) => m._id === 'expense')?.total || 0;
 
     const incomeChange = previousIncome > 0 ? (((currentIncome - previousIncome) / previousIncome) * 100).toFixed(1) : 0;
     const expenseChange = previousExpense > 0 ? (((currentExpense - previousExpense) / previousExpense) * 100).toFixed(1) : 0;
@@ -306,7 +357,7 @@ exports.getMonthlyComparison = async (req, res, next) => {
 // @access  Private
 exports.getTopCategories = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user._id;
     const { type = 'expense', limit = 10, startDate, endDate } = req.query;
 
     const matchQuery = {

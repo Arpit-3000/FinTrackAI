@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
@@ -17,7 +18,7 @@ import { colors, typography, spacing, borderRadius, shadows } from '../../theme'
 import { SkeletonLoader, ErrorView, LoadingOverlay } from '../../components';
 import { transactionService } from '../../services';
 import { formatCurrency } from '../../utils';
-import { useAuthStore } from '../../store/authStore';
+import { useAuthStore, useDataStore } from '../../store';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { MainTabParamList } from '../../types/navigation';
 
@@ -87,17 +88,22 @@ const getCategoryColor = (category: string): string => {
 
 export const DashboardScreen = ({ navigation }: Props) => {
   const { user } = useAuthStore();
+  const { refreshTrigger } = useDataStore();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(false); // Changed to false - only show on first load
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Refresh dashboard when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      loadDashboardData();
-    }, [])
-  );
+  // Refresh dashboard on mount
+  useEffect(() => {
+    loadDashboardData();
+  }, [refreshTrigger]);
+
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await loadDashboardData();
+    setIsRefreshing(false);
+  }, []);
 
   const loadDashboardData = async () => {
     try {
@@ -276,7 +282,18 @@ export const DashboardScreen = ({ navigation }: Props) => {
   return (
     <View style={styles.container}>
       <LoadingOverlay visible={loading} message="Loading Dashboard..." />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+      >
         {/* Dark Header */}
         <View style={styles.darkHeader}>
           {/* Top Bar */}
