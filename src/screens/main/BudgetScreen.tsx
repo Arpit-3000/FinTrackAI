@@ -102,6 +102,7 @@ export const BudgetScreen = ({ navigation }: Props) => {
   
   // Form state
   const [category, setCategory] = useState('');
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [amount, setAmount] = useState('');
   const [period, setPeriod] = useState<'monthly'>('monthly');
   const [alertThreshold, setAlertThreshold] = useState<number>(80);
@@ -509,35 +510,76 @@ export const BudgetScreen = ({ navigation }: Props) => {
               
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Select Category</Text>
-                <View style={styles.categoryGrid}>
-                  {PREDEFINED_CATEGORIES.map((cat) => {
-                    const isSelected = category.toLowerCase() === cat.toLowerCase();
-                    const iconName = getCategoryIcon(cat);
-                    const iconColor = getCategoryColor(cat);
-                    
-                    return (
-                      <TouchableOpacity
-                        key={cat}
-                        style={[
-                          styles.categoryGridItem,
-                          isSelected && styles.categoryGridItemSelected,
-                          isSelected && { borderColor: iconColor }
-                        ]}
-                        onPress={() => setCategory(cat)}
-                      >
-                        <View style={[styles.categoryGridIcon, { backgroundColor: iconColor + '20' }]}>
-                          <Ionicons name={iconName as any} size={20} color={iconColor} />
-                        </View>
-                        <Text style={[
-                          styles.categoryGridText,
-                          isSelected && { color: iconColor, fontWeight: '600' }
-                        ]} numberOfLines={1}>
-                          {cat}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                
+                {/* Dropdown Header Trigger */}
+                <TouchableOpacity
+                  style={[
+                    styles.dropdownTrigger,
+                    categoryDropdownOpen && styles.dropdownTriggerActive,
+                  ]}
+                  onPress={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
+                  activeOpacity={0.8}
+                >
+                  {category ? (
+                    <View style={styles.dropdownSelectedContainer}>
+                      <View style={[styles.dropdownIconBadge, { backgroundColor: getCategoryColor(category) + '20' }]}>
+                        <Ionicons name={getCategoryIcon(category) as any} size={20} color={getCategoryColor(category)} />
+                      </View>
+                      <Text style={styles.dropdownSelectedText}>{category}</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.dropdownSelectedContainer}>
+                      <View style={[styles.dropdownIconBadge, { backgroundColor: colors.accent + '15' }]}>
+                        <Ionicons name="folder-open" size={20} color={colors.accent} />
+                      </View>
+                      <Text style={styles.dropdownPlaceholderText}>Select a category...</Text>
+                    </View>
+                  )}
+                  <Ionicons
+                    name={categoryDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                    size={22}
+                    color={colors.accent}
+                  />
+                </TouchableOpacity>
+
+                {/* Dropdown Expanded Options List */}
+                {categoryDropdownOpen && (
+                  <View style={styles.dropdownListContainer}>
+                    <ScrollView style={styles.dropdownListScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                      {PREDEFINED_CATEGORIES.map((cat) => {
+                        const isSelected = category.toLowerCase() === cat.toLowerCase();
+                        const iconName = getCategoryIcon(cat);
+                        const iconColor = getCategoryColor(cat);
+                        return (
+                          <TouchableOpacity
+                            key={cat}
+                            style={[
+                              styles.dropdownItem,
+                              isSelected && styles.dropdownItemSelected,
+                            ]}
+                            onPress={() => {
+                              setCategory(cat);
+                              setCategoryDropdownOpen(false);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.dropdownItemLeft}>
+                              <View style={[styles.dropdownItemIcon, { backgroundColor: iconColor + '20' }, isSelected && { backgroundColor: iconColor }]}>
+                                <Ionicons name={iconName as any} size={18} color={isSelected ? colors.white : iconColor} />
+                              </View>
+                              <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextSelected]}>
+                                {cat}
+                              </Text>
+                            </View>
+                            {isSelected && (
+                              <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
 
               <View style={styles.formGroup}>
@@ -1017,5 +1059,89 @@ const styles = StyleSheet.create({
     ...typography.titleMedium,
     color: colors.white,
     fontWeight: '600',
+  },
+
+  // Custom Dropdown Selector Styles
+  dropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    ...shadows.sm,
+  },
+  dropdownTriggerActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  dropdownSelectedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  dropdownIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownSelectedText: {
+    ...typography.titleMedium,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  dropdownPlaceholderText: {
+    ...typography.body,
+    color: colors.textSecondary,
+  },
+  dropdownListContainer: {
+    marginTop: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxHeight: 220,
+    overflow: 'hidden',
+    ...shadows.md,
+  },
+  dropdownListScroll: {
+    paddingVertical: spacing.xs,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '40',
+  },
+  dropdownItemSelected: {
+    backgroundColor: colors.accent + '10',
+  },
+  dropdownItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  dropdownItemIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownItemText: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  dropdownItemTextSelected: {
+    color: colors.accent,
+    fontWeight: '700',
   },
 });

@@ -70,12 +70,29 @@ export const TransactionsScreen = ({ navigation }: Props) => {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<'all' | 'income' | 'expense'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
   const { refreshTrigger } = useDataStore();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const categoryOptions = [
+    { id: 'all', label: 'All', icon: 'apps', color: colors.accent },
+    { id: 'food', label: 'Food', icon: 'fast-food', color: colors.chartGold },
+    { id: 'groceries', label: 'Groceries', icon: 'cart', color: colors.chartGreen },
+    { id: 'shopping', label: 'Shopping', icon: 'bag-handle', color: colors.accent },
+    { id: 'transport', label: 'Transport', icon: 'car', color: colors.chartBlue },
+    { id: 'bills', label: 'Bills', icon: 'receipt', color: colors.warning },
+    { id: 'entertainment', label: 'Entertainment', icon: 'film', color: colors.chartPurple },
+    { id: 'healthcare', label: 'Health', icon: 'medical', color: colors.chartRed },
+    { id: 'education', label: 'Education', icon: 'school', color: colors.info },
+    { id: 'salary', label: 'Salary', icon: 'cash', color: colors.success },
+    { id: 'rent', label: 'Rent', icon: 'home', color: colors.accent },
+    { id: 'travel', label: 'Travel', icon: 'airplane', color: colors.chartBlue },
+  ];
 
   // Refresh transactions on mount or type changes
   useEffect(() => {
@@ -112,9 +129,13 @@ export const TransactionsScreen = ({ navigation }: Props) => {
         (transaction.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         transaction.category.toLowerCase().includes(searchQuery.toLowerCase()));
 
-      return matchesSearch;
+      const matchesCategory =
+        selectedCategory === 'all' ||
+        transaction.category.toLowerCase() === selectedCategory.toLowerCase();
+
+      return matchesSearch && matchesCategory;
     });
-  }, [transactions, searchQuery]);
+  }, [transactions, searchQuery, selectedCategory]);
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -122,18 +143,25 @@ export const TransactionsScreen = ({ navigation }: Props) => {
       .filter(t => t.type === 'income')
       .reduce((sum, t) => sum + Math.abs(t.amount), 0);
     
-    const expense = Math.abs(
-      filteredTransactions
-        .filter(t => t.type === 'expense')
-        .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-    );
+    const expense = filteredTransactions
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-    return { income, expense };
+    const net = income - expense;
+
+    return { income, expense, net };
   }, [filteredTransactions]);
 
   const handleTransactionPress = (transaction: Transaction) => {
     setSelectedTransaction(transaction);
     setModalVisible(true);
+  };
+
+  const handleEdit = () => {
+    if (!selectedTransaction) return;
+    const tToEdit = selectedTransaction;
+    setModalVisible(false);
+    navigation.navigate('AddTransaction', { transaction: tToEdit });
   };
 
   const handleDelete = async () => {
@@ -173,28 +201,42 @@ export const TransactionsScreen = ({ navigation }: Props) => {
         activeOpacity={0.7}
       >
         <View style={styles.transactionLeft}>
-          <View style={[styles.transactionIcon, { backgroundColor: categoryColor + '20' }]}>
+          <View style={[styles.transactionIcon, { backgroundColor: categoryColor + '18' }]}>
             {categoryIcon.type === 'ionicons' ? (
-              <Ionicons name={categoryIcon.name as any} size={24} color={categoryColor} />
+              <Ionicons name={categoryIcon.name as any} size={22} color={categoryColor} />
             ) : (
-              <MaterialCommunityIcons name={categoryIcon.name as any} size={24} color={categoryColor} />
+              <MaterialCommunityIcons name={categoryIcon.name as any} size={22} color={categoryColor} />
             )}
           </View>
           <View style={styles.transactionInfo}>
-            <Text style={styles.transactionTitle}>{item.description || item.category}</Text>
-            <Text style={styles.transactionDate}>
-              {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            <Text style={styles.transactionTitle} numberOfLines={1}>
+              {item.description || item.category}
             </Text>
+            <View style={styles.transactionMetaRow}>
+              <View style={[styles.categoryBadge, { backgroundColor: categoryColor + '15' }]}>
+                <Text style={[styles.categoryBadgeText, { color: categoryColor }]}>
+                  {item.category}
+                </Text>
+              </View>
+              <Text style={styles.transactionDate}>
+                {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </Text>
+            </View>
           </View>
         </View>
-        <Text
-          style={[
-            styles.transactionAmount,
-            { color: item.type === 'income' ? colors.success : colors.text },
-          ]}
-        >
-          {item.type === 'income' ? '+' : '-'}₹{Math.abs(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </Text>
+        <View style={styles.transactionRight}>
+          <Text
+            style={[
+              styles.transactionAmount,
+              { color: item.type === 'income' ? colors.success : colors.expense },
+            ]}
+          >
+            {item.type === 'income' ? '+' : '-'}₹{Math.abs(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </Text>
+          {item.paymentMethod ? (
+            <Text style={styles.paymentMethodTag}>{item.paymentMethod}</Text>
+          ) : null}
+        </View>
       </TouchableOpacity>
     );
   };
@@ -220,7 +262,7 @@ export const TransactionsScreen = ({ navigation }: Props) => {
             activeOpacity={0.8}
           >
             <LinearGradient
-              colors={colors.gradientPrimary}
+              colors={colors.gradientPrimary as [string, string, ...string[]]}
               style={styles.addButtonGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -230,11 +272,11 @@ export const TransactionsScreen = ({ navigation }: Props) => {
           </TouchableOpacity>
         </View>
 
-        {/* Summary Cards */}
+        {/* Summary Cards (Income, Expenses, Net Balance) */}
         <View style={styles.summaryContainer}>
           <View style={styles.summaryCard}>
             <View style={[styles.summaryIconContainer, { backgroundColor: colors.success + '15' }]}>
-              <Ionicons name="arrow-down" size={20} color={colors.success} />
+              <Ionicons name="arrow-down" size={18} color={colors.success} />
             </View>
             <View style={styles.summaryInfo}>
               <Text style={styles.summaryLabel}>Income</Text>
@@ -243,14 +285,27 @@ export const TransactionsScreen = ({ navigation }: Props) => {
               </Text>
             </View>
           </View>
+          
           <View style={styles.summaryCard}>
             <View style={[styles.summaryIconContainer, { backgroundColor: colors.expense + '15' }]}>
-              <Ionicons name="arrow-up" size={20} color={colors.expense} />
+              <Ionicons name="arrow-up" size={18} color={colors.expense} />
             </View>
             <View style={styles.summaryInfo}>
               <Text style={styles.summaryLabel}>Expenses</Text>
               <Text style={[styles.summaryAmount, { color: colors.expense }]}>
                 ₹{totals.expense.toLocaleString('en-IN')}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.summaryCard}>
+            <View style={[styles.summaryIconContainer, { backgroundColor: (totals.net >= 0 ? colors.accent : colors.warning) + '15' }]}>
+              <Ionicons name={totals.net >= 0 ? "wallet-outline" : "alert-circle-outline"} size={18} color={totals.net >= 0 ? colors.accent : colors.warning} />
+            </View>
+            <View style={styles.summaryInfo}>
+              <Text style={styles.summaryLabel}>Net Flow</Text>
+              <Text style={[styles.summaryAmount, { color: totals.net >= 0 ? colors.accent : colors.warning }]}>
+                {totals.net >= 0 ? '+' : ''}₹{totals.net.toLocaleString('en-IN')}
               </Text>
             </View>
           </View>
@@ -266,7 +321,7 @@ export const TransactionsScreen = ({ navigation }: Props) => {
         />
       </View>
 
-      {/* Filter Chips */}
+      {/* Type Filter Chips (All / Income / Expense) */}
       <View style={styles.filterContainer}>
         <FilterChip
           label="All"
@@ -284,6 +339,85 @@ export const TransactionsScreen = ({ navigation }: Props) => {
           onPress={() => setSelectedType('expense')}
         />
       </View>
+
+      {/* Category Dropdown Selector */}
+      <View style={styles.categoryDropdownSection}>
+        <TouchableOpacity
+          style={[
+            styles.categoryDropdownTrigger,
+            categoryDropdownOpen && styles.categoryDropdownTriggerActive,
+          ]}
+          onPress={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
+          activeOpacity={0.8}
+        >
+          {(() => {
+            const currentCat = categoryOptions.find(c => c.id === selectedCategory) || categoryOptions[0];
+            return (
+              <View style={styles.dropdownSelectedContainer}>
+                <View style={[styles.dropdownIconBadge, { backgroundColor: currentCat.color + '20' }]}>
+                  <Ionicons name={currentCat.icon as any} size={18} color={currentCat.color} />
+                </View>
+                <Text style={styles.dropdownSelectedText}>
+                  Category: <Text style={{ color: currentCat.color, fontWeight: '700' }}>{currentCat.label}</Text>
+                </Text>
+              </View>
+            );
+          })()}
+          <Ionicons
+            name={categoryDropdownOpen ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            color={colors.accent}
+          />
+        </TouchableOpacity>
+
+        {/* Dropdown Options List */}
+        {categoryDropdownOpen && (
+          <View style={styles.categoryDropdownListContainer}>
+            <ScrollView style={styles.dropdownListScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+              {categoryOptions.map((cat) => {
+                const isSelected = selectedCategory === cat.id;
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[
+                      styles.dropdownItem,
+                      isSelected && styles.dropdownItemSelected,
+                    ]}
+                    onPress={() => {
+                      setSelectedCategory(cat.id);
+                      setCategoryDropdownOpen(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.dropdownItemLeft}>
+                      <View style={[styles.dropdownItemIcon, { backgroundColor: cat.color + '20' }, isSelected && { backgroundColor: cat.color }]}>
+                        <Ionicons name={cat.icon as any} size={16} color={isSelected ? colors.white : cat.color} />
+                      </View>
+                      <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextSelected]}>
+                        {cat.label}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+      </View>
+
+      {/* Active Category Breakdown Banner */}
+      {selectedCategory !== 'all' && (
+        <View style={styles.categoryBanner}>
+          <Ionicons name="funnel-outline" size={16} color={colors.accent} />
+          <Text style={styles.categoryBannerText}>
+            Showing <Text style={{ fontWeight: '700', color: colors.accent }}>{filteredTransactions.length}</Text> transaction(s) in{' '}
+            <Text style={{ fontWeight: '700', color: colors.text }}>{categoryOptions.find(c => c.id === selectedCategory)?.label}</Text>
+          </Text>
+        </View>
+      )}
 
       {/* Transaction List */}
       <FlatList
@@ -303,12 +437,22 @@ export const TransactionsScreen = ({ navigation }: Props) => {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIcon}>
-              <Ionicons name="receipt-outline" size={64} color={colors.textSecondary} />
+              <Ionicons name="receipt-outline" size={56} color={colors.accent} />
             </View>
             <Text style={styles.emptyText}>No transactions found</Text>
             <Text style={styles.emptySubtext}>
-              {searchQuery ? 'Try a different search term' : 'Add your first transaction'}
+              {searchQuery || selectedCategory !== 'all' || selectedType !== 'all' 
+                ? 'Try adjusting your filters or search terms' 
+                : 'Start tracking your spending and income'}
             </Text>
+            <TouchableOpacity
+              style={styles.emptyAddButton}
+              onPress={() => navigation.navigate('AddTransaction', {})}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={colors.white} />
+              <Text style={styles.emptyAddButtonText}>Add Transaction</Text>
+            </TouchableOpacity>
           </View>
         }
       />
@@ -397,7 +541,19 @@ export const TransactionsScreen = ({ navigation }: Props) => {
                 </View>
 
                 <View style={styles.actionButtons}>
-                  <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+                  <TouchableOpacity style={styles.editButton} onPress={handleEdit} activeOpacity={0.8}>
+                    <LinearGradient
+                      colors={colors.gradientPrimary as [string, string, ...string[]]}
+                      style={styles.editButtonGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Ionicons name="create-outline" size={20} color={colors.white} />
+                      <Text style={styles.editButtonText}>Edit Transaction</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} activeOpacity={0.8}>
                     <Ionicons name="trash-outline" size={20} color={colors.white} />
                     <Text style={styles.deleteButtonText}>Delete</Text>
                   </TouchableOpacity>
@@ -444,71 +600,79 @@ const styles = StyleSheet.create({
   },
   summaryContainer: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.xs,
   },
   summaryCard: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: 'column',
     backgroundColor: colors.surface,
-    padding: spacing.base,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md,
     borderRadius: borderRadius.xl,
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: colors.border + '60',
     ...shadows.sm,
   },
   summaryIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: spacing.sm,
+    marginBottom: spacing.xs,
   },
   summaryInfo: {
-    flex: 1,
+    width: '100%',
   },
   summaryLabel: {
     ...typography.caption,
+    fontSize: 11,
     color: colors.textSecondary,
-    marginBottom: spacing.xxs,
+    marginBottom: 2,
+    fontWeight: '500',
   },
   summaryAmount: {
-    ...typography.titleLarge,
+    fontSize: 14,
     fontWeight: '700',
   },
   searchContainer: {
     paddingHorizontal: spacing.lg,
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
   },
   filterContainer: {
     flexDirection: 'row',
     paddingHorizontal: spacing.lg,
-    marginTop: spacing.base,
-    marginBottom: spacing.base,
-    gap: spacing.sm,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    gap: spacing.xs,
   },
   listContainer: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.xl + 40,
   },
   transactionCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    padding: spacing.base,
+    padding: spacing.md,
     borderRadius: borderRadius.xl,
     marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
     ...shadows.sm,
   },
   transactionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginRight: spacing.sm,
   },
   transactionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.md,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
@@ -519,16 +683,44 @@ const styles = StyleSheet.create({
   transactionTitle: {
     ...typography.titleMedium,
     color: colors.text,
-    marginBottom: spacing.xxs,
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  transactionMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  categoryBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: borderRadius.round,
+  },
+  categoryBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'capitalize',
   },
   transactionDate: {
     ...typography.caption,
     color: colors.textSecondary,
+    fontSize: 11,
+  },
+  transactionRight: {
+    alignItems: 'flex-end',
   },
   transactionAmount: {
-    ...typography.titleLarge,
+    ...typography.titleMedium,
     fontWeight: '700',
-    marginLeft: spacing.sm,
+    fontSize: 16,
+  },
+  paymentMethodTag: {
+    ...typography.caption,
+    fontSize: 10,
+    color: colors.textSecondary,
+    marginTop: 2,
+    textTransform: 'uppercase',
   },
   emptyContainer: {
     alignItems: 'center',
@@ -536,13 +728,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.massive,
   },
   emptyIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: colors.surface,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: colors.accent + '10',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   emptyText: {
     ...typography.h3,
@@ -552,6 +744,24 @@ const styles = StyleSheet.create({
   emptySubtext: {
     ...typography.body,
     color: colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.xl,
+  },
+  emptyAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.accent,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.xl,
+    gap: spacing.xs,
+    ...shadows.md,
+  },
+  emptyAddButtonText: {
+    ...typography.button,
+    color: colors.white,
+    fontWeight: '700',
   },
   modalOverlay: {
     flex: 1,
@@ -657,10 +867,129 @@ const styles = StyleSheet.create({
     ...typography.titleMedium,
     color: colors.text,
   },
+  categoryDropdownSection: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+    zIndex: 20,
+  },
+  categoryDropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.sm,
+  },
+  categoryDropdownTriggerActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  dropdownSelectedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  dropdownIconBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownSelectedText: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  categoryDropdownListContainer: {
+    marginTop: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxHeight: 220,
+    overflow: 'hidden',
+    ...shadows.md,
+  },
+  dropdownListScroll: {
+    paddingVertical: spacing.xxs,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '30',
+  },
+  dropdownItemSelected: {
+    backgroundColor: colors.accent + '10',
+  },
+  dropdownItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  dropdownItemIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownItemText: {
+    ...typography.caption,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  dropdownItemTextSelected: {
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  categoryBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+    gap: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  categoryBannerText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
   actionButtons: {
     marginTop: spacing.xl,
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  editButton: {
+    flex: 1,
+    borderRadius: borderRadius.base,
+    overflow: 'hidden',
+    ...shadows.sm,
+  },
+  editButtonGradient: {
+    flexDirection: 'row',
+    padding: spacing.base,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  editButtonText: {
+    ...typography.button,
+    color: colors.white,
+    fontWeight: '700',
   },
   deleteButton: {
+    flex: 1,
     flexDirection: 'row',
     backgroundColor: colors.error,
     padding: spacing.base,
@@ -668,10 +997,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    ...shadows.md,
+    ...shadows.sm,
   },
   deleteButtonText: {
     ...typography.button,
     color: colors.white,
+    fontWeight: '700',
   },
 });

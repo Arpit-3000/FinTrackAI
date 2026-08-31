@@ -93,6 +93,7 @@ export const AddTransactionScreen = ({ navigation, route }: Props) => {
     existingTransaction?.date ? new Date(existingTransaction.date) : new Date()
   );
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [animatedValue] = useState(new Animated.Value(0));
   const [saving, setSaving] = useState(false);
 
@@ -288,50 +289,86 @@ export const AddTransactionScreen = ({ navigation, route }: Props) => {
           </View>
         </View>
 
-        {/* Category Selection */}
+        {/* Category Dropdown Selector */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
             Choose Category
             <Text style={styles.sectionSubtitle}> (Required)</Text>
           </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-            <View style={styles.categoryGrid}>
-              {categoryList.map((category, index) => (
-                <TouchableOpacity
-                  key={category.id}
-                  style={[
-                    styles.categoryCard,
-                    selectedCategory === category.id && styles.categoryCardSelected,
-                  ]}
-                  onPress={() => setSelectedCategory(category.id)}
-                >
-                  <View style={[
-                    styles.categoryIconContainer,
-                    { backgroundColor: category.color + '20' },
-                    selectedCategory === category.id && { backgroundColor: category.color }
-                  ]}>
-                    {renderIcon(
-                      category.icon, 
-                      category.iconType, 
-                      selectedCategory === category.id ? colors.white : category.color, 
-                      28
-                    )}
-                  </View>
-                  <Text style={[
-                    styles.categoryName,
-                    selectedCategory === category.id && styles.categoryNameSelected
-                  ]}>
-                    {category.name}
-                  </Text>
-                  {selectedCategory === category.id && (
-                    <View style={styles.selectedIndicator}>
-                      <Ionicons name="checkmark" size={16} color={colors.white} />
+
+          {/* Dropdown Header Trigger */}
+          <TouchableOpacity
+            style={[
+              styles.dropdownTrigger,
+              categoryDropdownOpen && styles.dropdownTriggerActive,
+            ]}
+            onPress={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
+            activeOpacity={0.8}
+          >
+            {(() => {
+              const currentCategoryObj = categoryList.find(c => c.id === selectedCategory);
+              if (currentCategoryObj) {
+                return (
+                  <View style={styles.dropdownSelectedContainer}>
+                    <View style={[styles.dropdownIconBadge, { backgroundColor: currentCategoryObj.color + '20' }]}>
+                      {renderIcon(currentCategoryObj.icon, currentCategoryObj.iconType, currentCategoryObj.color, 22)}
                     </View>
-                  )}
-                </TouchableOpacity>
-              ))}
+                    <Text style={styles.dropdownSelectedText}>{currentCategoryObj.name}</Text>
+                  </View>
+                );
+              }
+              return (
+                <View style={styles.dropdownSelectedContainer}>
+                  <View style={[styles.dropdownIconBadge, { backgroundColor: colors.accent + '15' }]}>
+                    <Ionicons name="folder-open" size={20} color={colors.accent} />
+                  </View>
+                  <Text style={styles.dropdownPlaceholderText}>Select a category...</Text>
+                </View>
+              );
+            })()}
+            <Ionicons
+              name={categoryDropdownOpen ? 'chevron-up' : 'chevron-down'}
+              size={22}
+              color={colors.accent}
+            />
+          </TouchableOpacity>
+
+          {/* Dropdown Expanded Options List */}
+          {categoryDropdownOpen && (
+            <View style={styles.dropdownListContainer}>
+              <ScrollView style={styles.dropdownListScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                {categoryList.map((category) => {
+                  const isSelected = selectedCategory === category.id;
+                  return (
+                    <TouchableOpacity
+                      key={category.id}
+                      style={[
+                        styles.dropdownItem,
+                        isSelected && styles.dropdownItemSelected,
+                      ]}
+                      onPress={() => {
+                        setSelectedCategory(category.id);
+                        setCategoryDropdownOpen(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.dropdownItemLeft}>
+                        <View style={[styles.dropdownItemIcon, { backgroundColor: category.color + '20' }, isSelected && { backgroundColor: category.color }]}>
+                          {renderIcon(category.icon, category.iconType, isSelected ? colors.white : category.color, 20)}
+                        </View>
+                        <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextSelected]}>
+                          {category.name}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
-          </ScrollView>
+          )}
         </View>
 
         {/* Date Selection */}
@@ -822,5 +859,105 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: 'bold',
     marginLeft: spacing.sm,
+  },
+
+  // Custom Dropdown Selector Styles
+  dropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    ...shadows.sm,
+  },
+  dropdownTriggerActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  dropdownSelectedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  dropdownIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownSelectedText: {
+    ...typography.titleMedium,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  dropdownPlaceholderText: {
+    ...typography.body,
+    color: colors.textSecondary,
+  },
+  dropdownListContainer: {
+    marginTop: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxHeight: 260,
+    overflow: 'hidden',
+    ...shadows.md,
+  },
+  dropdownListScroll: {
+    paddingVertical: spacing.xs,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '40',
+  },
+  dropdownItemSelected: {
+    backgroundColor: colors.accent + '10',
+  },
+  dropdownItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  dropdownItemIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownItemText: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  dropdownItemTextSelected: {
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  showMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    backgroundColor: colors.backgroundSecondary,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: spacing.xs,
+  },
+  showMoreText: {
+    ...typography.button,
+    color: colors.accent,
+    fontWeight: '700',
+    fontSize: 14,
   },
 });
