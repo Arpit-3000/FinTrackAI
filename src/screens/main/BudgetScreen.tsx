@@ -111,10 +111,16 @@ export const BudgetScreen = ({ navigation }: Props) => {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Refresh budget on mount or trigger
+  // Refresh budget on mount, focus, or trigger
   useEffect(() => {
     loadBudgetData();
   }, [refreshTrigger]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadBudgetData();
+    }, [])
+  );
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);

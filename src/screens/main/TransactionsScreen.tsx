@@ -75,7 +75,7 @@ export const TransactionsScreen = ({ navigation }: Props) => {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  const { refreshTrigger } = useDataStore();
+  const { refreshTrigger, triggerRefresh } = useDataStore();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -180,6 +180,7 @@ export const TransactionsScreen = ({ navigation }: Props) => {
               await transactionService.deleteTransaction(selectedTransaction._id);
               setTransactions(prev => prev.filter(t => t._id !== selectedTransaction._id));
               setModalVisible(false);
+              triggerRefresh();
               Alert.alert('Success', 'Transaction deleted successfully');
             } catch (err: any) {
               Alert.alert('Error', err.message || 'Failed to delete transaction');

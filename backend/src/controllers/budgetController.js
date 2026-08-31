@@ -2,6 +2,22 @@ const mongoose = require('mongoose');
 const Budget = require('../models/Budget');
 const Transaction = require('../models/Transaction');
 
+// Category regex helper to handle singular/plural and name variations
+const getCategoryRegex = (categoryName) => {
+  const trimmed = categoryName.trim();
+  if (/^grocer(y|ies)$/i.test(trimmed)) {
+    return '^(groceries|grocery)$';
+  }
+  if (/^health(care)?$/i.test(trimmed)) {
+    return '^(healthcare|health)$';
+  }
+  if (/^food/i.test(trimmed)) {
+    return '^(food|food & dining|food and dining)$';
+  }
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return `^${escaped}$`;
+};
+
 // @desc    Get all budgets for user
 // @route   GET /api/budgets
 // @access  Private
@@ -80,16 +96,19 @@ exports.createBudget = async (req, res, next) => {
 
     // Calculate initial spent amount
     const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
+    const startDate = new Date(budget.startDate);
+    startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(budget.endDate);
     endDate.setHours(23, 59, 59, 999);
+    const categoryPattern = getCategoryRegex(budget.category);
 
     const spent = await Transaction.aggregate([
       {
         $match: {
           user: userId,
-          category: { $regex: new RegExp(`^${budget.category.trim()}$`, 'i') },
+          category: { $regex: new RegExp(categoryPattern, 'i') },
           type: 'expense',
-          date: { $gte: budget.startDate, $lte: endDate },
+          date: { $gte: startDate, $lte: endDate },
         },
       },
       {
@@ -186,16 +205,19 @@ exports.getBudgetSummary = async (req, res, next) => {
     // Calculate real-time spent for each budget from transactions
     const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
     for (const budget of budgets) {
+      const startDate = new Date(budget.startDate);
+      startDate.setHours(0, 0, 0, 0);
       const endDate = new Date(budget.endDate);
       endDate.setHours(23, 59, 59, 999);
+      const categoryPattern = getCategoryRegex(budget.category);
 
       const spent = await Transaction.aggregate([
         {
           $match: {
             user: userId,
-            category: { $regex: new RegExp(`^${budget.category.trim()}$`, 'i') },
+            category: { $regex: new RegExp(categoryPattern, 'i') },
             type: 'expense',
-            date: { $gte: budget.startDate, $lte: endDate },
+            date: { $gte: startDate, $lte: endDate },
           },
         },
         {
